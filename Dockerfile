@@ -3,76 +3,59 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-# Install minimal system packages
+# Install system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    wget \
-    tzdata \
-    bzip2 \
-    git \
+    curl ca-certificates wget tzdata bzip2 git \
+    build-essential gcc g++ \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install NVM and Node.js v20
-ENV NVM_DIR=/root/.nvm
-RUN curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash && \
-    . "$NVM_DIR/nvm.sh" && \
-    nvm install 20 && \
-    nvm alias default 20 && \
-    nvm use default
-ENV PATH=$NVM_DIR/versions/node/v20.*/bin:$PATH
-
-# Install Miniconda
+# Install Miniconda (auto-detect architecture)
 ENV CONDA_DIR=/opt/conda
 ENV PATH=$CONDA_DIR/bin:$PATH
 
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+        URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh"; \
+    else \
+        URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"; \
+    fi && \
+    wget --quiet "$URL" -O /tmp/miniconda.sh && \
     bash /tmp/miniconda.sh -b -p $CONDA_DIR && \
-    rm /tmp/miniconda.sh && \
-    conda clean -afy
+    rm /tmp/miniconda.sh && conda clean -afy
 
-# Configure Conda to avoid Terms of Service error (SYSTEM-WIDE)
-RUN conda config --system --remove-key channels || true && \
-    conda config --system --add channels conda-forge && \
+# Configure Conda
+RUN conda config --system --add channels conda-forge && \
     conda config --system --set channel_priority strict && \
-    conda config --system --set always_yes yes && \
-    conda config --system --set auto_activate_base false
-    
-
-# Install mamba into base env (now it will work)
-RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-
+    conda config --system --set always_yes yes
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 RUN conda install -n base mamba
 
-# # Set working directory
+# Create Python environment
 WORKDIR /workspace
-
-
-
-# COPY ui/taxonium/taxonium-backend /app/taxonium-backend
-# COPY ui/linolium/dist /app/linolium/dist
-
 COPY env.yml /workspace/env.yml
-
-RUN conda init
-
-# Create the environment (taxalin)
-RUN conda env create -f env.yml && \
-    conda clean -afy
-
+RUN conda env create -f env.yml && conda clean -afy
 RUN mamba run -n taxalin mamba install -c conda-forge boost=1.85 -y
 
-# COPY . /app
+
+# Copy Python tools
+COPY autolin /workspace/autolin
+COPY data /workspace/data
+
+# Build UI (in /workspace so it's separate from mounted /workspace)
+COPY ui/linolium /workspace/ui
+WORKDIR /workspace/ui
+RUN npm run install-all && NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
 
-RUN conda init bash
+WORKDIR /workspace
+EXPOSE 3000 8001
 
-# Append env activation to bash startup
-RUN echo "conda activate taxalin" >> /root/.bashrc
-
-# Activate the environment for all future shell commands
-SHELL ["conda", "run", "-n", "taxalin", "/bin/bash", "-c"]
-
-CMD ["bash"]
+# Setup shell
+RUN conda init bash && echo "conda activate taxalin" >> /root/.bashrc
+SHELL ["/bin/bash", "-c"]

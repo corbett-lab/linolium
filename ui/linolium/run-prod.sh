@@ -42,6 +42,7 @@ echo "🚀 Starting servers..."
 
 # Start backend with custom data file
 cd taxonium_backend
+npm install
 echo "🔄 Starting backend on port 8001..."
 node server.js --port 8001 --data_file "$BACKEND_DATA_FILE" &
 BACKEND_PID=$!
@@ -52,7 +53,7 @@ sleep 2
 # Start frontend server
 cd ..
 echo "🔄 Starting frontend on port 3000..."
-npx vite preview --port 3000 &
+npx serve dist -l 3000 &
 FRONTEND_PID=$!
 
 echo ""

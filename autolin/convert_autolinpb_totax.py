@@ -143,12 +143,12 @@ def main():
     #make sure autolin_clade.tsv is not empty
     clade_file = None
 
-    with open(parent_dir+"/autolin_clade.tsv", 'r') as f:
+    with open("./autolin_clade.tsv", 'r') as f:
         if sum(1 for _ in f) == 1:
-            print(f"Error: {parent_dir}/autolin_clade.tsv was not created or is empty.", file=sys.stderr)
+            print(f"Error: autolin_clade.tsv was not created or is empty.", file=sys.stderr)
             sys.exit(1)        
         else:
-            clade_file = parent_dir+"/autolin_clade.tsv"
+            clade_file = "./autolin_clade.tsv"
             print('clade', clade_file)
             fix_metadata(clade_file)
             if amd != None:
