@@ -32,6 +32,16 @@ cd /workspace/ui/linolium
 ./run-prod.sh /workspace/<tree_with_lineages>.jsonl.gz # Starts frontend web UI on port 3000, backend on 8001
 ```
 
+## Start with your own tree
+```bash
+# find your Docker container ID
+docker ps -a
+
+# copy MAT protobuf file into container
+docker cp /path/to/mat.pb CONTAINER_ID:/workspace/data
+```
+
+
 ## View and edit lineages in UI
 
 Open http://localhost:3000 in a web browser 
