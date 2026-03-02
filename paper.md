@@ -60,5 +60,7 @@ The Linolium lineage curation browser interface is built with the Taxonium libra
 
 ![Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existing and AutoLin assigned lineages within Linolium browser interface.\label{fig:Figure1}](Figure1.png)
 
+Figure 1: Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existing and AutoLin assigned lineages within Linolium browser interface.
+
 
 
