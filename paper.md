@@ -56,7 +56,7 @@ Linolium is a containerized workflow that connects analysis, conversion, and vis
 
 Rather than developing competing software, we chose to build upon existing open-source tools to improve their efficiency and biological relevance. Linolium uses data formats and tools that are well documented and commonly used to build on existing frameworks and provide reliable results. All of its analyses and visualizations are built around the UShER Mutation Annotated Tree (MAT) format[@Turakhia2021-xn], which has become widely used in public health applications, tracking infectious disease evolution[@Karim2025-jb;Martinez-Martinez2023-us;Mboowa2026-wv;@McBroome2022-nf;Turakhia2022-bs]. We extended the core logic of AutoLin by introducing a metadata-weighting mechanism that incorporates user-defined contextual variables into lineage scoring and prioritization.  This allows the software to accept user-defined metadata, such as geographic or clinical importance, ensuring that the resulting lineage assignments are tailored to the specific biological context of the research. 
 
-The Linolium lineage curation browser interface is built with the Taxonium library. We extended Taxonium with lineage-aware visualization components that directly ingest AutoLin proposals \autoref{fig:Figure1}., enable node-level lineage reassignment (Figure 2 and 3), and export updated lineage annotations in a format compatible with downstream phylogenetic analysis (Figure 1). This creates a unified environment in which automated lineage inference and expert-driven revision operate on the same underlying tree representation.. This design supports iterative cycles of automated lineage proposal followed by expert curation within the same analytical environment.  By centralizing these tools into a unified, containerized application, Linolium consolidates previously separate command-line workflows into a single reproducible system for lineage designation and curation.
+The Linolium lineage curation browser interface is built with the Taxonium library. We extended Taxonium with lineage-aware visualization components that directly ingest AutoLin proposals \autoref{fig:Figure1}., enable node-level lineage reassignment \autoref{fig:Figure2} and \autoref{fig:Figure3}, and export updated lineage annotations in a format compatible with downstream phylogenetic analysis (Figure 1). This creates a unified environment in which automated lineage inference and expert-driven revision operate on the same underlying tree representation.. This design supports iterative cycles of automated lineage proposal followed by expert curation within the same analytical environment.  By centralizing these tools into a unified, containerized application, Linolium consolidates previously separate command-line workflows into a single reproducible system for lineage designation and curation.
 
 ![Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existing and AutoLin assigned lineages within Linolium browser interface.\label{fig:Figure1}](Figure1.png)
 
@@ -65,6 +65,25 @@ Figure 1: Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existi
 ![Linolium browser in lineage reassignment node for AutoLin designated lineage 4.8.62. In this mode any node can be selected as the new parent node for the lineage. In addition to parent node reassignment, a lineage can also be merged into the parent lineage, essentially rejecting a suggested lineage.\label{fig:Figure2}](Figure2.png)
 
 Figure 2: Linolium browser in lineage reassignment node for AutoLin designated lineage 4.8.62. In this mode any node can be selected as the new parent node for the lineage. In addition to parent node reassignment, a lineage can also be merged into the parent lineage, essentially rejecting a suggested lineage.
+
+![AutoLin designated Lineage auto.lineage4.8.62 after parent node reassignment (see Figure 2). Node reassignment will identify all descendent leaves and assign their correct lineage.\label{fig:Figure3}](Figure3.png)
+
+Figure 3: AutoLin designated Lineage auto.lineage4.8.62 after parent node reassignment (see Figure 2). Node reassignment will identify all descendent leaves and assign their correct lineage. 
+
+Because the ultimate goal of the analysis is interactive exploration, we chose to host all user interaction within a locally-hosted browser-based interface within the Docker container. This design removes the requirement for command-line expertise, allowing users to upload data and manage parameters through a graphical environment. This integrated approach transforms a series of isolated technical tasks into a complete, accessible pathway for pathogen surveillance.
+
+Research Impact Statement:
+To ensure immediate utility for public health genomic surveillance, the Linolium pipeline is built as a high-performance, reproducible environment that is currently ready for external adoption. A suite of Python command line tools powers the backend, while a locally hosted web interface manages the workflow, enabling users to execute and monitor analysis pipelines sequentially. The web interface, lineage designation tools, and interactive visualization are fully containerized using Docker, allowing for deployment on many computing environments without the need for manual dependency management. Community-readiness is further signaled by the public availability of the source code at https://github.com/corbett-lab/lineage-curation/tree/main, which includes highly documented README and example datasets to facilitate rapid onboarding for new users. By leveraging the UShER framework, Linolium is natively compatible with existing global-scale Mutation Annotated Trees (MATs), making it an immediately viable solution for researchers monitoring Tuberculosis, Monkey Pox, Dengue fever and many many other pathogens.
+
+# AI Usage Disclosure
+
+We used generative AI tools, primarily for elements of the web browser interface and developing the Docker container. AI tools were used for editing grammar and wording within the manuscript but not for generating written content. All AI-generated content was carefully reviewed and verified before inclusion.
+
+# Acknowledgements
+
+Linolium uses and adapts code from several open source projects. The authors thank the many developers of UShER, AutoLin, and Taxonium. This work was supported by CDC award BAA 74D30124C202302.  
+
+# References
 
 
 
