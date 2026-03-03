@@ -58,7 +58,7 @@ Rather than developing competing software, we chose to build upon existing open-
 
 The Linolium lineage curation browser interface is built with the Taxonium library. We extended Taxonium with lineage-aware visualization components that directly ingest AutoLin proposals (\autoref{Figure 1}), enable node-level lineage reassignment (\autoref{Figure 2} and \autoref{Figure 3}), and export updated lineage annotations in a format compatible with downstream phylogenetic analysis (\autoref{Figure 1}). This creates a unified environment in which automated lineage inference and expert-driven revision operate on the same underlying tree representation. This design supports iterative cycles of automated lineage proposal followed by expert curation within the same analytical environment.  By centralizing these tools into a unified, containerized application, Linolium consolidates previously separate command-line workflows into a single reproducible system for lineage designation and curation.
 
-![Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existing and AutoLin assigned lineages within Linolium browser interface.\label{Figure 1}](Figure1.png)
+![Visualization of M. tuberculosis Lineage 4.8 phylogeny with pre-existing and AutoLin assigned lineages within Linolium browser interface.\label{Figure 1}](Figure1.svg)
 
 
 ![Linolium browser in lineage reassignment node for AutoLin designated lineage 4.8.62. In this mode any node can be selected as the new parent node for the lineage. In addition to parent node reassignment, a lineage can also be merged into the parent lineage, essentially rejecting a suggested lineage.\label{Figure 2}](Figure2.png)
@@ -69,7 +69,8 @@ The Linolium lineage curation browser interface is built with the Taxonium libra
 
 Because the ultimate goal of the analysis is interactive exploration, we chose to host all user interaction within a locally-hosted browser-based interface within the Docker container. This design removes the requirement for command-line expertise, allowing users to upload data and manage parameters through a graphical environment. This integrated approach transforms a series of isolated technical tasks into a complete, accessible pathway for pathogen surveillance.
 
-Research Impact Statement:
+# Research Impact Statement
+
 To ensure immediate utility for public health genomic surveillance, the Linolium pipeline is built as a high-performance, reproducible environment that is currently ready for external adoption. A suite of Python command line tools powers the backend, while a locally hosted web interface manages the workflow, enabling users to execute and monitor analysis pipelines sequentially. The web interface, lineage designation tools, and interactive visualization are fully containerized using Docker, allowing for deployment on many computing environments without the need for manual dependency management. Community-readiness is further signaled by the public availability of the source code at https://github.com/corbett-lab/lineage-curation/tree/main, which includes highly documented README and example datasets to facilitate rapid onboarding for new users. By leveraging the UShER framework, Linolium is natively compatible with existing global-scale Mutation Annotated Trees (MATs), making it an immediately viable solution for researchers monitoring Tuberculosis, Monkey Pox, Dengue fever and many many other pathogens.
 
 # AI Usage Disclosure
