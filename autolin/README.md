@@ -76,11 +76,11 @@ Although there is no objective ground truth to new lineage designations, we show
 
 As an example of the work possible with our tool, we use Mycobacterium tuberculosis lineage 4.8 (Figure 1).
 
-![Lineage4.8 visual.](4.8.svg)
+![Lineage4.8 visual.](4.8.svg){width=90%}
 
 Lineage 4.8 has 8262 samples and only 3 small sublineage designations that identify biologically similar samples within the clade (Figure1). Without phenotypic feature weighting, AutoLin suggests 67 sublineages (71 total lineages including 4 pre-existing) () with average clade size 116.37 and clade size standard deviation 204.96. 
 
-![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg)
+![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg){width=90%}
 
 
 *Future steps: use RAND index to characterize lineages proposed from phenotype weighting*
