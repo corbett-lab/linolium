@@ -74,11 +74,11 @@ Although AutoLin was already capable of accepting predetermined weights for samp
 
 Although there is no objective ground truth to new lineage designations, we show that feature weighting does provide more intuitive lineage suggestions that support the continuation of biologically relevant clade groupings downstream. 
 
-As an example of the work possible with our tool, we use Mycobacterium tuberculosis lineage 4.8 (\autoref{Figure 1}).
+As an example of the work possible with our tool, we use Mycobacterium tuberculosis lineage 4.8 (Figure 1).
 
 ![Lineage4.8 visual.\label{Figure 1}](4.8.svg)
 
-Lineage 4.8 has 8262 samples and only 3 small sublineage designations that identify biologically similar samples within the clade (\autoref{Figure 1}). Without phenotypic feature weighting, AutoLin suggests 67 sublineages (71 total lineages including 4 pre-existing) () with average clade size 116.37 and clade size standard deviation 204.96. 
+Lineage 4.8 has 8262 samples and only 3 small sublineage designations that identify biologically similar samples within the clade (Figure1). Without phenotypic feature weighting, AutoLin suggests 67 sublineages (71 total lineages including 4 pre-existing) () with average clade size 116.37 and clade size standard deviation 204.96. 
 
 ![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg)
 
