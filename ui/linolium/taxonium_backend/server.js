@@ -12,8 +12,9 @@ var axios = require("axios");
 var pako = require("pako");
 const URL = require("url").URL;
 const ReadableWebToNodeStream = require("readable-web-to-node-stream");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const { Readable } = require("stream");
+const multer = require("multer");
 var parser = require("stream-json").parser;
 var streamValues = require("stream-json/streamers/StreamValues").streamValues;
 
@@ -39,6 +40,21 @@ program.parse();
 const command_options = program.opts();
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "taxonium"));
 
+// Setup multer for file uploads
+const uploadDir = path.join(tmpDir, "uploads");
+fs.mkdirSync(uploadDir, { recursive: true });
+const upload = multer({ 
+  dest: uploadDir,
+  limits: { fileSize: 5 * 1024 * 1024 * 1024 } // 5GB limit
+});
+
+// Track pipeline output file for dynamic reloading
+let pipelineOutputFile = null;
+
+// Lock to prevent multiple simultaneous data reloads
+let reloadInProgress = false;
+let reloadPromise = null;
+
 const in_cache = new Set();
 
 const cache_helper = {
@@ -63,13 +79,13 @@ const cache_helper = {
   },
 };
 
-// Either data_url or data_file must be defined, if not display error
-if (
-  command_options.data_url === undefined &&
-  command_options.data_file === undefined
-) {
-  console.log("--data_url or --data_file must be supplied");
-  process.exit(1);
+// Allow starting without data for launcher mode
+const launcherMode = command_options.data_url === undefined && 
+                     command_options.data_file === undefined;
+
+if (launcherMode) {
+  console.log("Starting in launcher mode - no data file specified");
+  console.log("Upload a .pb file through the UI to begin");
 }
 
 import("taxonium_data_handling/importing.js").then((imported) => {
@@ -121,6 +137,264 @@ const logStatusMessage = (status_obj) => {
 
 app.get("/", function (req, res) {
   res.send("Hello World, Taxonium is here!");
+});
+
+// File upload endpoint
+app.post("/upload", upload.single("file"), function (req, res) {
+  console.log("/upload - receiving file");
+  
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  const originalName = req.file.originalname;
+  const newPath = path.join(uploadDir, originalName);
+  
+  // Rename file to preserve original extension
+  fs.renameSync(req.file.path, newPath);
+  
+  console.log(`File uploaded: ${originalName} -> ${newPath}`);
+  
+  res.json({
+    success: true,
+    filename: originalName,
+    path: newPath,
+    size: req.file.size
+  });
+});
+
+// Pipeline execution endpoint - runs autolin propose + conversion
+app.post("/run-autolin", async function (req, res) {
+  console.log("/run-autolin - starting pipeline");
+  
+  const { inputFile, params } = req.body;
+  
+  if (!inputFile) {
+    return res.status(400).json({ error: "No input file specified" });
+  }
+
+  // Set headers for streaming response
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Transfer-Encoding", "chunked");
+
+  const sendEvent = (type, data) => {
+    res.write(JSON.stringify({ type, ...data }) + "\n");
+  };
+
+  try {
+    const basename = path.basename(inputFile, ".pb");
+    const outputDir = path.dirname(inputFile);
+    const autolinPb = path.join(outputDir, `${basename}.autolin.pb`);
+    const jsonlOutput = path.join(outputDir, `${basename}.autolin.jsonl.gz`);
+
+    // Determine autolin directory (relative to this script or in /app for Docker)
+    const autolinDir = fs.existsSync("/app/autolin") 
+      ? "/app/autolin" 
+      : path.resolve(__dirname, "../../autolin");
+
+    sendEvent("stage", { stage: "proposing" });
+    sendEvent("log", { message: `Input: ${inputFile}` });
+    sendEvent("log", { message: `Output: ${autolinPb}` });
+
+    // Build command arguments for propose_sublineages.py
+    const proposeArgs = [
+      "propose_sublineages.py",
+      "-i", inputFile,
+      "-o", autolinPb,
+      "-m", String(params?.minsamples || 10),
+      "-t", String(params?.distinction || 1),
+      "-u", String(params?.cutoff || 0.95),
+      "-f", String(params?.floor || 0)
+    ];
+
+    if (params?.recursive) proposeArgs.push("-r");
+    if (params?.verbose) proposeArgs.push("-v");
+    if (params?.clear) proposeArgs.push("-c");
+
+    sendEvent("log", { message: `Running: python ${proposeArgs.join(" ")}` });
+
+    // Run propose_sublineages.py
+    await new Promise((resolve, reject) => {
+      const pythonCmd = process.env.CONDA_PREFIX 
+        ? `${process.env.CONDA_PREFIX}/bin/python`
+        : "python";
+      
+      const propose = spawn(pythonCmd, proposeArgs, {
+        cwd: autolinDir,
+        env: { ...process.env }
+      });
+
+      propose.stdout.on("data", (data) => {
+        const lines = data.toString().split("\n").filter(l => l.trim());
+        lines.forEach(line => sendEvent("log", { message: line }));
+      });
+
+      propose.stderr.on("data", (data) => {
+        const lines = data.toString().split("\n").filter(l => l.trim());
+        lines.forEach(line => sendEvent("log", { message: line }));
+      });
+
+      propose.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`propose_sublineages.py exited with code ${code}`));
+        }
+      });
+
+      propose.on("error", (err) => {
+        reject(new Error(`Failed to start propose_sublineages.py: ${err.message}`));
+      });
+    });
+
+    sendEvent("log", { message: "propose_sublineages.py completed successfully" });
+
+    // Stage 2: Convert to Taxonium format
+    sendEvent("stage", { stage: "converting" });
+    sendEvent("log", { message: "Converting to Taxonium format..." });
+
+    const convertArgs = [
+      "convert_autolinpb_totax.py",
+      "-a", autolinPb
+    ];
+
+    sendEvent("log", { message: `Running: python ${convertArgs.join(" ")}` });
+
+    await new Promise((resolve, reject) => {
+      const pythonCmd = process.env.CONDA_PREFIX 
+        ? `${process.env.CONDA_PREFIX}/bin/python`
+        : "python";
+      
+      const convert = spawn(pythonCmd, convertArgs, {
+        cwd: autolinDir,
+        env: { ...process.env }
+      });
+
+      convert.stdout.on("data", (data) => {
+        const lines = data.toString().split("\n").filter(l => l.trim());
+        lines.forEach(line => sendEvent("log", { message: line }));
+      });
+
+      convert.stderr.on("data", (data) => {
+        const lines = data.toString().split("\n").filter(l => l.trim());
+        lines.forEach(line => sendEvent("log", { message: line }));
+      });
+
+      convert.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`convert_autolinpb_totax.py exited with code ${code}`));
+        }
+      });
+
+      convert.on("error", (err) => {
+        reject(new Error(`Failed to start convert_autolinpb_totax.py: ${err.message}`));
+      });
+    });
+
+    sendEvent("log", { message: "Conversion completed successfully" });
+
+    // Store the output file for the reload endpoint
+    pipelineOutputFile = jsonlOutput;
+
+    sendEvent("complete", { 
+      outputFile: jsonlOutput,
+      message: "Pipeline completed successfully"
+    });
+
+    res.end();
+
+  } catch (error) {
+    console.error("Pipeline error:", error);
+    sendEvent("error", { message: error.message });
+    res.end();
+  }
+});
+
+// Reload data from a new file (called after pipeline completes)
+app.post("/reload-data", async function (req, res) {
+  console.log("/reload-data - reloading data from pipeline output");
+
+  const { dataFile } = req.body;
+  const fileToLoad = dataFile || pipelineOutputFile;
+
+  if (!fileToLoad) {
+    return res.status(400).json({ error: "No data file specified" });
+  }
+
+  if (!fs.existsSync(fileToLoad)) {
+    return res.status(404).json({ error: `File not found: ${fileToLoad}` });
+  }
+
+  // If a reload is already in progress, wait for it
+  if (reloadInProgress && reloadPromise) {
+    console.log("Reload already in progress, waiting...");
+    try {
+      await reloadPromise;
+      return res.json({ success: true, nodes: processedData.nodes.length, cached: true });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Start new reload
+  reloadInProgress = true;
+  
+  reloadPromise = (async () => {
+    try {
+      await waitForTheImports();
+
+      const stream = fs.createReadStream(fileToLoad);
+      const supplied_object = {
+        stream: stream,
+        status: "stream_supplied",
+        filename: fileToLoad,
+      };
+
+      processedData = await importing.processJsonl(
+        supplied_object,
+        logStatusMessage,
+        ReadableWebToNodeStream.ReadableWebToNodeStream,
+        parser,
+        streamValues,
+        Buffer
+      );
+
+      if (config.no_file) {
+        importing.generateConfig(config, processedData);
+      }
+
+      processedData.genes = Array.from(
+        new Set(processedData.mutations.map((mutation) => mutation.gene))
+      );
+
+      cached_starting_values = filtering.getNodes(
+        processedData.nodes,
+        processedData.y_positions,
+        processedData.overallMinY,
+        processedData.overallMaxY,
+        processedData.overallMinX,
+        processedData.overallMaxX,
+        "x_dist",
+        config.useHydratedMutations,
+        processedData.mutations
+      );
+
+      console.log("Data reloaded successfully");
+      return { success: true, nodes: processedData.nodes.length };
+    } finally {
+      reloadInProgress = false;
+    }
+  })();
+
+  try {
+    const result = await reloadPromise;
+    res.json(result);
+  } catch (error) {
+    console.error("Reload error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/search", function (req, res) {
@@ -285,7 +559,7 @@ app.get("/lineages", function (req, res) {
 
   // Build lineage hierarchy directly from clade labels in the tree
   const cladeNodeMap = new Map(); // Map clade label -> clade node
-  const lineageHierarchy = new Map(); // Map lineage -> {count, descendants, etc.}
+  const lineageHierarchy = new Map(); // Map lineage -> {count, descendants, parent, etc.}
 
   // First pass: collect all clade nodes
   for (const node of processedData.nodes) {
@@ -302,8 +576,25 @@ app.get("/lineages", function (req, res) {
     }
   });
 
+  // Helper function to find parent lineage by walking up the tree
+  const findParentLineage = (nodeId, currentCladeLabel) => {
+    let currentNode = nodeLookup[nodeId];
+    while (currentNode && currentNode.parent_id && currentNode.parent_id !== currentNode.node_id) {
+      const parentNode = nodeLookup[currentNode.parent_id];
+      if (parentNode && parentNode.clades && parentNode.clades.pango) {
+        const parentClade = parentNode.clades.pango;
+        // Only return if it's a different clade and actually exists
+        if (parentClade !== currentCladeLabel && actualExistingLineages.has(parentClade)) {
+          return parentClade;
+        }
+      }
+      currentNode = parentNode;
+    }
+    return null; // No parent lineage found (this is a root lineage)
+  };
+
   // Second pass: for each clade, calculate its direct count and descendant info
-  // BUT only include clades that correspond to lineages that actually exist
+  // Count ALL descendant tips under this clade, including those with different lineage annotations
   for (const [cladeLabel, cladeNode] of cladeNodeMap.entries()) {
     // Skip clades that don't correspond to existing lineages (i.e., merged away)
     if (!actualExistingLineages.has(cladeLabel)) {
@@ -314,24 +605,33 @@ app.get("/lineages", function (req, res) {
 
     // Count all descendant leaves and unique lineages
     const descendantLineageSet = new Set();
-    let descendantLeaves = 0;
+    let totalTips = 0;  // ALL tips under this clade
+    let directTips = 0; // Tips with this exact lineage annotation
 
     descendants.forEach(descId => {
       const descNode = nodeLookup[descId];
-      if (descNode && descNode.is_tip && descNode[field] && descNode[field] !== '') {
-        // Only count lineages that are different from the current clade lineage
-        if (descNode[field] !== cladeLabel) {
-          descendantLineageSet.add(descNode[field]);
+      if (descNode && descNode.is_tip) {
+        totalTips++;  // Count all tips
+        if (descNode[field] && descNode[field] !== '') {
+          // Track what lineages are under this clade
+          if (descNode[field] !== cladeLabel) {
+            descendantLineageSet.add(descNode[field]);
+          } else {
+            directTips++;  // Tips directly assigned to this lineage
+          }
         }
-        descendantLeaves++;
       }
     });
 
+    // Find the parent lineage by walking up the tree
+    const parentLineage = findParentLineage(cladeNode.node_id, cladeLabel);
+
     lineageHierarchy.set(cladeLabel, {
       value: cladeLabel,
-      count: descendantLeaves, // Total count is all descendant leaves
+      count: totalTips, // Total count is ALL descendant tips under this clade
       descendantLineages: descendantLineageSet.size,
-      descendantLeaves: descendantLeaves
+      descendantLeaves: totalTips,
+      parent: parentLineage // Parent lineage from tree structure
     });
   }
 
@@ -398,6 +698,26 @@ app.get("/lineages", function (req, res) {
 
   console.log(`DEBUG: Added ${intermediateLineages.size} intermediate lineages`);
   console.log(`DEBUG: Total lineages now: ${lineageHierarchy.size}`);
+
+  // Filter out redundant auto.X lineages where X also exists
+  // These represent the same clade - autolin creates auto.X as an intermediate
+  // but if X exists as an established lineage, we should use X
+  const allExistingLineages = new Set(lineageHierarchy.keys());
+  const toRemove = [];
+  
+  for (const [lineageName, lineageData] of lineageHierarchy.entries()) {
+    if (lineageName.startsWith('auto.')) {
+      const baseName = lineageName.substring(5);
+      if (allExistingLineages.has(baseName)) {
+        // The non-auto version exists, remove the auto version
+        toRemove.push(lineageName);
+        console.log(`DEBUG: Filtering out ${lineageName} because ${baseName} exists`);
+      }
+    }
+  }
+  
+  toRemove.forEach(name => lineageHierarchy.delete(name));
+  console.log(`DEBUG: Removed ${toRemove.length} redundant auto lineages`);
 
   // Convert to array format from our clade-based hierarchy
   const lineageArray = Array.from(lineageHierarchy.values());
@@ -1067,6 +1387,36 @@ app.get("/export/metadata", function (req, res) {
 
 const loadData = async () => {
   await waitForTheImports();
+  
+  // In launcher mode, skip loading data - wait for user to upload
+  if (launcherMode) {
+    console.log("Launcher mode: Waiting for data upload");
+    // Initialize empty processedData structure
+    processedData = {
+      nodes: [],
+      mutations: [],
+      y_positions: [],
+      overallMinX: 0,
+      overallMaxX: 0,
+      overallMinY: 0,
+      overallMaxY: 0,
+      node_to_mut: {},
+      genes: [],
+      rootMutations: [],
+      rootId: null
+    };
+    cached_starting_values = [];
+    
+    setTimeout(() => {
+      console.log("Starting to listen (launcher mode)");
+      startListening();
+      logStatusMessage({
+        status: "launcher_ready",
+      });
+    }, 10);
+    return;
+  }
+  
   let supplied_object;
   if (command_options.data_file) {
     local_file = command_options.data_file;

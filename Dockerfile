@@ -40,7 +40,7 @@ RUN conda install -n base mamba
 WORKDIR /workspace
 COPY env.yml /workspace/env.yml
 RUN conda env create -f env.yml && conda clean -afy
-RUN mamba run -n taxalin mamba install -c conda-forge boost=1.85 -y
+RUN mamba run -n taxalin mamba install -c conda-forge boost -y || true
 
 
 # Copy Python tools
@@ -59,3 +59,42 @@ EXPOSE 3000 8001
 # Setup shell
 RUN conda init bash && echo "conda activate taxalin" >> /root/.bashrc
 SHELL ["/bin/bash", "-c"]
+
+# Set Node.js memory limit for large trees
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
+# Create start script for the launcher workflow
+RUN printf '#!/bin/bash\n\
+source /opt/conda/etc/profile.d/conda.sh\n\
+conda activate taxalin\n\
+\n\
+echo ""\n\
+echo "🧬 Lineage Curation Launcher"\n\
+echo ""\n\
+\n\
+# Start backend server in launcher mode (no data file)\n\
+cd /workspace/ui/taxonium_backend\n\
+echo "🔌 Starting backend on port 8001..."\n\
+node server.js --port 8001 &\n\
+BACKEND_PID=$!\n\
+\n\
+# Wait for backend to initialize\n\
+sleep 2\n\
+\n\
+# Start frontend server\n\
+cd /workspace/ui\n\
+echo "🌐 Starting frontend on port 3000..."\n\
+npx vite preview --port 3000 --host 0.0.0.0 &\n\
+FRONTEND_PID=$!\n\
+\n\
+echo ""\n\
+echo "✨ Ready!"\n\
+echo "🌐 Open http://localhost:3000 in your browser"\n\
+echo "📂 Upload a .pb file to begin"\n\
+echo ""\n\
+\n\
+# Wait for either process to exit\n\
+wait\n\
+' > /workspace/start.sh && chmod +x /workspace/start.sh
+
+CMD ["/workspace/start.sh"]

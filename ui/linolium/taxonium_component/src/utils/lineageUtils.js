@@ -20,11 +20,74 @@ export const isPangoLineage = (name) => {
 
 /**
  * Parses a Pango lineage name to determine its hierarchical structure
- * @param {string} lineageName - The Pango lineage name (e.g., "B.1.1.7")
+ * 
+ * Autolin naming convention:
+ * - auto.X.Y is a PROPOSED sublineage of X (the Y is a serial number)
+ * - auto.lineage4.8.1.1 is the first proposed child of lineage4.8.1
+ * - auto.lineage4.8.1.1.1 is the first proposed child of auto.lineage4.8.1.1
+ * 
+ * The parent lookup works by checking if the auto. version of the parent exists:
+ * - auto.lineage4.8.1.1 → try auto.lineage4.8.1, if not exists → lineage4.8.1
+ * - auto.lineage4.8.1.1.1 → auto.lineage4.8.1.1 (exists in data)
+ * 
+ * @param {string} lineageName - The Pango lineage name (e.g., "B.1.1.7" or "auto.lineage4.8.1.1")
+ * @param {Set} allLineages - Optional set of all lineage names to check for parent existence
  * @returns {object} Object with parts array and parent lineage name
  */
-export const parseLineageName = (lineageName) => {
+export const parseLineageName = (lineageName, allLineages = null) => {
   if (!lineageName) return { parts: [], parent: null };
+  
+  // Handle 'auto.' prefix
+  if (lineageName.startsWith('auto.')) {
+    const baseName = lineageName.substring(5); // Remove 'auto.' prefix
+    const baseParts = baseName.split('.');
+    
+    // auto.X.Y.Z -> parent could be auto.X.Y (if it exists) or X.Y (the base lineage)
+    // auto.lineage4.8.1.1 -> parent is lineage4.8.1 (base) or auto.lineage4.8.1 if it exists
+    // auto.lineage4.8.1.1.1 -> parent is auto.lineage4.8.1.1
+    if (baseParts.length > 1) {
+      const parentBaseName = baseParts.slice(0, -1).join('.');
+      const autoParent = 'auto.' + parentBaseName;
+      
+      // If we have a list of all lineages, check if auto parent exists
+      // Otherwise, prefer the auto parent if the base has enough parts to suggest it's auto-generated
+      if (allLineages) {
+        // Check if auto.parent exists in the data
+        if (allLineages.has(autoParent)) {
+          return { 
+            parts: ['auto', ...baseParts], 
+            parent: autoParent
+          };
+        }
+      } else {
+        // Heuristic: if baseName has 3+ parts after the root lineage name,
+        // the parent is likely also an auto lineage
+        // e.g., auto.lineage4.8.1.1.1 -> auto.lineage4.8.1.1
+        // But auto.lineage4.8.1 -> lineage4.8 (first level of auto)
+        // Count dots in baseName to determine depth
+        const dotCount = (baseName.match(/\./g) || []).length;
+        // If there are 3+ parts (e.g., lineage4.8.1.1 has 3 dots), parent is likely auto
+        if (dotCount >= 3) {
+          return { 
+            parts: ['auto', ...baseParts], 
+            parent: autoParent
+          };
+        }
+      }
+      
+      // Default: parent is the non-auto base lineage
+      return { 
+        parts: ['auto', ...baseParts], 
+        parent: parentBaseName
+      };
+    } else {
+      // auto.X with no dots - this is a root-level proposed lineage
+      return { 
+        parts: ['auto', baseName], 
+        parent: null
+      };
+    }
+  }
   
   // Handle multi-letter root lineages (AY, BA, XBB, etc.)
   let parts;
@@ -52,7 +115,7 @@ export const parseLineageName = (lineageName) => {
       parent = null;
     }
   } else {
-    // Standard lineage handling (e.g., "B.1.1.7")
+    // Standard lineage handling (e.g., "B.1.1.7" or "lineage2.2.1")
     parts = lineageName.split('.');
     parent = parts.length > 1 
       ? parts.slice(0, parts.length - 1).join('.') 
@@ -73,109 +136,30 @@ const normalizeLineageForColoring = (name) => {
 
 /**
  * Organizes lineage data into a hierarchical structure based on Pango naming
- * @param {Array} lineages - Array of lineage objects with value, count, and color properties
+ * @param {Array} lineages - Array of lineage objects with value, count, color, and parent properties
  * @param {Object} nodeTypes - Optional object with node type information (internal vs leaf)
  * @returns {Array} Hierarchical structure of lineages
  */
 export const organizeLineageHierarchy = (lineages, nodeTypes = null) => {
   if (!lineages || !lineages.length) return [];
   
-  // First, merge normal lineages into auto hierarchy
-  const mergedLineages = [];
-  const mergeMap = {}; // Map to track merged lineages
+  // Build a set of all lineage names for quick lookup
+  const allNames = new Set(lineages.map(l => l.value).filter(Boolean));
   
-  // Process each lineage and merge if necessary
-  lineages.forEach(lineage => {
-    if (!lineage.value) {
-      mergedLineages.push(lineage);
-      return;
-    }
-    
-    // Check if this is a normal lineage that should be merged into auto
-    const normalizedName = normalizeLineageForColoring(lineage.value, lineages.map(l => l.value));
-    
-    if (normalizedName !== lineage.value) {
-      // This lineage should be merged into the normalized version
-      if (mergeMap[normalizedName]) {
-        // Add counts to existing merged lineage
-        mergeMap[normalizedName].count += lineage.count;
-      } else {
-        // Create new merged lineage entry
-        mergeMap[normalizedName] = {
-          ...lineage,
-          value: normalizedName,
-        };
-      }
-    } else {
-      // This lineage doesn't need merging, but check if it's a target of merging
-      if (mergeMap[lineage.value]) {
-        // Add counts to existing merged lineage
-        mergeMap[lineage.value].count += lineage.count;
-      } else {
-        // Create new entry
-        mergeMap[lineage.value] = { ...lineage };
-      }
-    }
-  });
-  
-  // Convert mergeMap back to array
-  const processedLineages = Object.values(mergeMap);
-  
-  console.log('=== LINEAGE MERGING ===');
-  console.log('Original lineages:', lineages.length);
-  console.log('Merged lineages:', processedLineages.length);
-  console.log('Sample merges:');
-  processedLineages.slice(0, 10).forEach(l => {
-    const original = lineages.find(orig => orig.value === l.value);
-    if (!original) {
-      console.log(`  ${l.value} (merged from multiple sources)`);
-    }
-  });
-  console.log('=======================');
+  // No filtering needed - the backend already provides the correct lineages
+  // Just use lineages directly
+  const processedLineages = lineages.map(l => ({ ...l }));
   
   // Create a map for quick access to lineages by name
   const lineageMap = {};
   
-  // Helper to get all possible parent lineages from a lineage name
-  // e.g., "B.1.1.7" -> ["B", "B.1", "B.1.1"]
-  const getAllParentLineages = (lineageName) => {
-    if (!lineageName) return [];
-    
-    // Handle special cases for multi-letter root lineages
-    let parts;
-    if (/^[A-Z]{2,}($|\.)/.test(lineageName)) {
-      // This is a multi-letter root lineage like "AY" or "AY.4"
-      const dotIndex = lineageName.indexOf('.');
-      if (dotIndex > 0) {
-        // Split into root + numeric parts, e.g., "AY.4.3" -> ["AY", "4", "3"]
-        const rootPart = lineageName.substring(0, dotIndex);
-        const numericParts = lineageName.substring(dotIndex + 1).split('.');
-        parts = [rootPart, ...numericParts];
-      } else {
-        // Just the root like "AY" or "XBB"
-        parts = [lineageName];
-      }
-    } else {
-      // Regular lineage like "B.1.1.7"
-      parts = lineageName.split('.');
+  // Build a lookup of lineage data including parent from backend
+  const lineageDataMap = {};
+  processedLineages.forEach(lineage => {
+    if (lineage.value) {
+      lineageDataMap[lineage.value] = lineage;
     }
-    
-    const parents = [];
-    
-    // Build parent names from parts
-    let currentParent = parts[0];
-    parents.push(currentParent);
-    
-    for (let i = 1; i < parts.length; i++) {
-      currentParent += `.${parts[i]}`;
-      parents.push(currentParent);
-    }
-    
-    // Remove the last one as it's the lineage itself
-    parents.pop();
-    
-    return parents;
-  };
+  });
   
   // First pass: Create nodes for all lineages that appear in the data
   processedLineages.forEach(lineage => {
@@ -187,27 +171,105 @@ export const organizeLineageHierarchy = (lineages, nodeTypes = null) => {
       
       lineageMap[lineage.value] = {
         name: lineage.value,
-        count: lineage.count, // Total count will be recalculated
-        originalCount: lineage.count, // Direct count for this lineage
-        sampleCount: isLeafCount ? lineage.count : 0, // Count of actual samples (leaves)
-        internalCount: isLeafCount ? 0 : lineage.count, // Count of internal nodes
+        count: lineage.count,
+        originalCount: lineage.count,
+        sampleCount: isLeafCount ? lineage.count : 0,
+        internalCount: isLeafCount ? 0 : lineage.count,
+        descendantLineages: lineage.descendantLineages || 0,
+        descendantLeaves: lineage.descendantLeaves || 0,
         color: generatePangoLineageColor(lineage.value, processedLineages),
         children: [],
         isExpanded: false,
-        level: getLineageLevel(lineage.value)
+        level: getLineageLevel(lineage.value),
+        backendParent: lineage.parent || null // Parent from backend tree traversal
       };
     }
-    
-    // Note: We no longer create artificial parent lineages that don't exist in the data
-    // Only lineages that actually have clade nodes in the tree should be included
   });
+  
+  // Create a set of all lineage names for parent lookup
+  const allLineageNames = new Set(Object.keys(lineageMap));
+  
+  // Helper to get the parent for a lineage
+  // PREFER the backend-provided parent if available, otherwise fall back to parsing
+  const getParent = (lineageName) => {
+    const node = lineageMap[lineageName];
+    
+    // First: use backend-provided parent if it exists in our data
+    if (node && node.backendParent && allLineageNames.has(node.backendParent)) {
+      return node.backendParent;
+    }
+    
+    // Fallback: parse parent from lineage name
+    // This handles cases where backend doesn't provide parent (e.g., intermediate nodes)
+    if (lineageName.startsWith('auto.')) {
+      const baseName = lineageName.substring(5);
+      const baseParts = baseName.split('.');
+      if (baseParts.length > 1) {
+        const parentBaseName = baseParts.slice(0, -1).join('.');
+        const autoParent = 'auto.' + parentBaseName;
+        
+        // Prefer non-auto parent if it exists
+        if (allLineageNames.has(parentBaseName)) {
+          return parentBaseName;
+        }
+        if (allLineageNames.has(autoParent)) {
+          return autoParent;
+        }
+        return parentBaseName; // Will need intermediate node
+      }
+      return allLineageNames.has(baseName) ? baseName : null;
+    }
+    
+    // Regular lineage
+    const parts = lineageName.split('.');
+    if (parts.length > 1) {
+      return parts.slice(0, -1).join('.');
+    }
+    return null;
+  };
+  
+  // Create intermediate parent nodes where needed
+  const createIntermediateParents = () => {
+    const lineagesToCheck = [...Object.keys(lineageMap)];
+    const created = new Set();
+    
+    for (const lineageName of lineagesToCheck) {
+      const parent = getParent(lineageName);
+      if (parent && !lineageMap[parent] && !created.has(parent)) {
+        // Need to create an intermediate parent
+        lineageMap[parent] = {
+          name: parent,
+          count: 0,
+          originalCount: 0,
+          sampleCount: 0,
+          internalCount: 0,
+          descendantLineages: 0,
+          descendantLeaves: 0,
+          color: generatePangoLineageColor(parent, processedLineages),
+          children: [],
+          isExpanded: false,
+          level: getLineageLevel(parent),
+          isIntermediate: true // Mark as synthesized
+        };
+        created.add(parent);
+        allLineageNames.add(parent);
+      }
+    }
+    
+    // Recursively check if the newly created parents also need parents
+    if (created.size > 0) {
+      createIntermediateParents();
+    }
+  };
+  
+  createIntermediateParents();
   
   // Second pass: Build the hierarchy and accumulate counts
   const rootLineages = [];
   
   // Link children to parents and accumulate counts
   Object.values(lineageMap).forEach(node => {
-    const { parent } = parseLineageName(node.name);
+    const parent = getParent(node.name);
     
     if (!parent) {
       // This is a root-level lineage (e.g., "A", "B", "AY")
@@ -285,6 +347,12 @@ export const organizeLineageHierarchy = (lineages, nodeTypes = null) => {
  */
 export const getLineageLevel = (lineageName) => {
   if (!lineageName) return 0;
+  
+  // Handle 'auto.' prefix - auto.X is one level deeper than X
+  if (lineageName.startsWith('auto.')) {
+    const baseName = lineageName.substring(5);
+    return getLineageLevel(baseName) + 1;
+  }
   
   // Handle multi-letter root lineages (AY, BA, XBB, etc.)
   if (/^[A-Z]{2,}($|\.)/.test(lineageName)) {
