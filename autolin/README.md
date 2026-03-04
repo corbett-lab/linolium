@@ -66,7 +66,7 @@ The user-named output file will contain 3 columns: `Sample`, `Weight`, and `Phen
 
 Once the output of `autolin -p` is available (in this case`mtb.4.8.pheno.pb`) there are a couple of ways to make this data viewable in taxonium. SEE `Getting lineage designations into Taxonium` below for details. 
 
-#### Demonstrated efficacy of phenotype weighting as shown in MTB lineage4.8
+### Demonstrated efficacy of phenotype weighting as shown in MTB lineage4.8
 
 Linolium improves the biological relevance of AutoLin lineage suggestions by allowing the user to identify important metadata features that should be weighted more heavily in automated lineage assignment. 
 
@@ -76,21 +76,20 @@ Although there is no objective ground truth to new lineage designations, we show
 
 As an example of the work possible with our tool, we use Mycobacterium tuberculosis lineage 4.8 (Figure 1).
 
-<img src="4.8.svg" alt="Lineage 4.8 visual.">
-
+![Lineage4.8 visual.\label{Figure 1}](4.8.svg)
 
 Lineage 4.8 has 8262 samples and only 3 small sublineage designations that identify biologically similar samples within the clade (Figure1). Without phenotypic feature weighting, AutoLin suggests 67 sublineages (71 total lineages including 4 pre-existing) () with average clade size 116.37 and clade size standard deviation 204.96. 
 
-![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg){width=90%}
+![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg)
 
+To improve the biological relevance of the identified sublineages, we created a script to weight tuberculosis samples based on their TB-profiler predicted antibiotic resistance type which we ordinally weighted with “Sensitive” having the lowest weight and “Extensively Drug Resistant” (XDR-TB) having the highest. With these features submitted to Linolium, 38 sublineages were proposed (41 total lineages including 4 pre-existing), with average clade size 196.71 and clade size standard deviation of 276.40 (Figure 3A). 
 
-*Future steps: use RAND index to characterize lineages proposed from phenotype weighting*
+To compare the level of clade rearrangement caused by this feature weighting, we calculated an Adjusted Rand Index((Scikit-Learn, n.d.; Hubert and Arabie 1985)) between the unweighted and weighted phylogenetic lineage designations. The calculated value was 0.875 indicating that only 12.5% of pairwise relationships changed between these 2 methods. Overall we can understand phenotypic feature weighting for lineage designation to refine but not significantly alter clade identification. 
 
+![Lineage4.8 visual.\label{Figure 3}](figure3.svg)
 
-#### Identifying mutations for weighting in SARS-CoV-2
-*to do asap*
+A noticeable improvement in lineage suggestion can be observed for auto.4.8.1.1 (red square in 3A)(Figure 3C) where TB profiler predicted resistance weights change the size of lineage auto.4.8.1.1 (yellow) (in comparison with the unweighted suggestion in 3B) based on the concentration of predicted multi-drug resistant samples (MDR-TB) (red circles 3C). With phenotype weighting, a small, likely biologically irrelevant clade in purple is omitted. 
 
-####
 
 ### Getting lineage designations into Taxonium
 To create a file for visualization in Taxonium users should use the `-o` or `--output` flag in propose_sublineages.py. Supply an output MAT name `{your tree}autolin.pb`. This output file will have both existing and proposed autolin annotations on the internal nodes. To convert this file into a `jsonl.gz` type for taxonium, use usher_to_taxonium which is available in TaxoniumTools https://github.com/theosanderson/taxonium/tree/master/taxoniumtools. 
