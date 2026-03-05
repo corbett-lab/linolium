@@ -40,7 +40,6 @@ RUN conda install -n base mamba
 WORKDIR /workspace
 COPY env.yml /workspace/env.yml
 RUN conda env create -f env.yml && conda clean -afy
-RUN mamba run -n taxalin mamba install -c conda-forge boost -y || true
 
 
 # Copy Python tools
