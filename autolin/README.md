@@ -3,7 +3,7 @@ Import propose_sublineages.py from https://github.com/jmcbroome/autolin (commit 
 ### Example Demonstration
 As a beginner example, as well as proof of concept, we have extracted the XFG clade from the SARS-CoV-2 global phylogeny using the command `matUtils extract -i public-latest.all.masked.pb.gz -c XFG -o XFG.pb` and lineage4.8 from the MTB global phylogeny using `matUtils extract -i {mtb tree} -c lineage4.8 -o {4.8 output}`. 
 
-Note to self and user: The SARS-CoV-2 global phylogeny is annotated on the nodes using matUtils annotate. The original tree has both nextstrain and pango annotations resulting in 2 labels on certain internal nodes. Autolin is performing strangely on the dual-annotated tree. To combat this issue, I have reannotated the tree wih only a single annotation. The commands I used are as follows:
+Note to user: The SARS-CoV-2 global phylogeny is annotated on the nodes using matUtils annotate. The original tree has both nextstrain and pango annotations resulting in 2 labels on certain internal nodes. Autolin is performing strangely on the dual-annotated tree. To combat this issue, I have reannotated the tree wih only a single annotation. The commands I used are as follows:
 `matUtils extract -i public-latest.all.masked.pb.gz -c XFG -o XFG.pb`
 `matUtils summary -i XFG.pb -C XFG.clades`
 `cut -f1,3 XFG.clades > XFGclades.pangoonly.tsv`
@@ -54,31 +54,42 @@ We have also extracted a subtree of XFG from the SARS-CoV-2 global phylogeny. Th
 The most basic command to designate new lineages within `mtb.4.8.pb` is `python3 propose_sublineages.py -i mtb.4.8.pb -o mtb.4.8.autolin.pb`. The results of this can be observed in `mtb.4.8.autolin.jsonl.gz`. To generate recursive sublineages the command is `python3 propose_sublineages.py -i mtb.4.8.pb -r -o mtb.4.8.autolin.r.pb` which relies on a default `-m` setting of 10 and results in lineages as shown in `mtb.4.8.autolin.r.jsonl.gz`. The resulting clades and their sizes can be viewed with `matUtils summary -i mtb.4.8.autolin.r.pb -c mtb.4.8.autolin.r.cladecounts.tsv` and `-m` can be toggled according to user needs. Lower `-m` values will increase the number of proposed sublineages and decrease the number of samples in a proposed sublineage. 
 
 #### Identifying phenotypes for weighting in MTB
-As an example of how to use phenotypic weighting for consideration in autolin, we have created a helper script that accepts as input an annotated phylogeny and a metadata table containing predicted or observed antibiotic resistance information. 
-
-**NOTE: Future scripts will be more generalized than this. This is just one example.**
-
-This script employs an ordinal weighting scheme based on drug resistance characterized by the WHO (https://wwwnc.cdc.gov/eid/article/28/9/22-0458_article).  
+As an example of how to use phenotypic weighting for consideration in autolin, we have created a helper script that accepts as input an annotated phylogeny and a metadata table containing predicted or observed antibiotic resistance information. This script employs an ordinal weighting scheme based on drug resistance characterized by the WHO (https://wwwnc.cdc.gov/eid/article/28/9/22-0458_article).  
 
 To use this script, an annotated MAT and its corresponding metadata file is required. For this demonstration we use `mtb.4.8.pb` and `mtb.20250912.metadata.tsv.gz` which can be downloaded from https://hgdownload.gi.ucsc.edu/hubs/GCF/000/195/955/GCF_000195955.2/UShER_Mtb_SRA/. **NOTE this script assumes that it is being run from the `autolin` directory and will write outputs to this dir.** *Future versions will be more adaptable.* **Note this script hardcodes output names, if data currently exists in these files it will be overwritten by the newest run of the code** *future versions will avoid overwriting existing data*
 
 Currently the way this script runs is with the command `py phenotypes.py -m {metadata file containing a column of predicted or pbserved resistance type (i.e. RR-TB, HR-TB, MDR-TB, etc} -t {name of MAT}  -c {name of column containing categorical resistance types} -o {output}`. For us the command was as follows: `py phenotypes.py -m mtb.20240912.metadata.tsv.gz -t mtb.4.8.pb  -c tbprof_drtype -o phenotypeweights.tsv`
 
-This script is assuming categorical data either from TB profiler or another source. The data is ranked from lowest to highest:["Sensitive", "HR-TB", "RR-TB", "MDR-TB", "Pre-XDR-TB", "XDR-TB"]. Any data outside of these categories will be given a weight of 0.5 while these categories will recieve equally distributed weights between 0 and 1. If your data is not in this format this script is not going to work. *future scripts will take in MIC data for determining weighting*
+This script is assuming categorical data either from TB profiler or another source. The data is ranked from lowest to highest:["Sensitive", "HR-TB", "RR-TB", "MDR-TB", "Pre-XDR-TB", "XDR-TB"]. Any data outside of these categories will be given a weight of 0.5 while these categories will recieve equally distributed weights between 0 and 1. If your data is not in this format this script is not going to work. 
 
-*note the below strategy will likely change, it is a short term approach to collecting needed data for taxonium input*
 The user-named output file will contain 3 columns: `Sample`, `Weight`, and `Phenotype`. However, the script will generate 2 additional files: `pheno.pheno.tsv` and `pheno.weights.tsv` which are 2 column files which both contain sample ID in the first column and phenotypes or samples weights respectively in the second column. After running phenotypes.py, autolin designations can be made using `py propose_sublineages.py -i mtb.4.8.pb -p pheno.weights.tsv -o mtb.4.8.pheno.pb` (with user arg choices after the flags.)
 
 Once the output of `autolin -p` is available (in this case`mtb.4.8.pheno.pb`) there are a couple of ways to make this data viewable in taxonium. SEE `Getting lineage designations into Taxonium` below for details. 
 
-*Future steps: use RAND index to characterize lineages proposed from phenotype weighting*
-*Future steps: create a system for MIC resistance values (not categorical data)*
+### Demonstrated efficacy of phenotype weighting as shown in MTB lineage4.8
 
+Linolium improves the biological relevance of AutoLin lineage suggestions by allowing the user to identify important metadata features that should be weighted more heavily in automated lineage assignment. 
 
-#### Identifying mutations for weighting in SARS-CoV-2
-*to do asap*
+Although AutoLin was already capable of accepting predetermined weights for samples, the user was wholly responsible for determining those weights. Our novel contributions to AutoLin allow for a user to choose metadata features for weighting without making weighting decisions for each sample in the tree. 
 
-####
+Although there is no objective ground truth to new lineage designations, we show that feature weighting does provide more intuitive lineage suggestions that support the continuation of biologically relevant clade groupings downstream. 
+
+As an example of the work possible with our tool, we use Mycobacterium tuberculosis lineage 4.8 (Figure 1).
+
+![Lineage4.8 visual.\label{Figure 1}](4.8.svg)
+
+Lineage 4.8 has 8262 samples and only 3 small sublineage designations that identify biologically similar samples within the clade (Figure1). Without phenotypic feature weighting, AutoLin suggests 67 sublineages (71 total lineages including 4 pre-existing) () with average clade size 116.37 and clade size standard deviation 204.96. 
+
+![Lineage4.8 visual.\label{Figure 2}](4.8.auto.svg)
+
+To improve the biological relevance of the identified sublineages, we created a script to weight tuberculosis samples based on their TB-profiler predicted antibiotic resistance type which we ordinally weighted with “Sensitive” having the lowest weight and “Extensively Drug Resistant” (XDR-TB) having the highest. With these features submitted to Linolium, 38 sublineages were proposed (41 total lineages including 4 pre-existing), with average clade size 196.71 and clade size standard deviation of 276.40 (Figure 3A). 
+
+To compare the level of clade rearrangement caused by this feature weighting, we calculated an Adjusted Rand Index((Scikit-Learn, n.d.; Hubert and Arabie 1985)) between the unweighted and weighted phylogenetic lineage designations. The calculated value was 0.875 indicating that only 12.5% of pairwise relationships changed between these 2 methods. Overall we can understand phenotypic feature weighting for lineage designation to refine but not significantly alter clade identification. 
+
+![Lineage4.8 visual.\label{Figure 3}](figure3.svg)
+
+A noticeable improvement in lineage suggestion can be observed for auto.4.8.1.1 (red square in 3A)(Figure 3C) where TB profiler predicted resistance weights change the size of lineage auto.4.8.1.1 (yellow) (in comparison with the unweighted suggestion in 3B) based on the concentration of predicted multi-drug resistant samples (MDR-TB) (red circles 3C). With phenotype weighting, a small, likely biologically irrelevant clade in purple is omitted. 
+
 
 ### Getting lineage designations into Taxonium
 To create a file for visualization in Taxonium users should use the `-o` or `--output` flag in propose_sublineages.py. Supply an output MAT name `{your tree}autolin.pb`. This output file will have both existing and proposed autolin annotations on the internal nodes. To convert this file into a `jsonl.gz` type for taxonium, use usher_to_taxonium which is available in TaxoniumTools https://github.com/theosanderson/taxonium/tree/master/taxoniumtools. 
@@ -100,25 +111,7 @@ Notes on usher_to_taxonium:
 usher_to_taxonium has sparse documentation and many hardcoded quirks. Users can use usher_to_taxonium directly but will very likely experience formatting issues. We recommend using convert_autolinpb_totax.py.
 
 
-To do list:
-- [X] create scripts to convert autolin pbs into taxonium jsonl gzs
-- [X] determine where in jsonl autolin data will be kept (for taxonium updates)
-- [X] get conversion scripts to handle multiple columns of metadata
-- [ ] reduce reliance of scripts on hardcoding and bash scripting (where possible)
-- [ ] run testing in docker container for robustness
-- [ ] create a script to handle metadata column naming between matUtils summary and usher_to_taxonium (make sure whatever column is named is available in taxonium)
-- [ ] make more phenotype scripts for weigting antibiotic resistance data. i.e. numerical mic data
-- [ ] make phenotype script accept an ordinal list of categories from the user 
-- [ ] make a mutation script that identifies likely mutations of interest for SARS-CoV-2 (or expand on use of GFF for propose_sublineages)
-- [ ] generalize mutation script for other pathogens 
-- [ ] turn all of these processes into pipelines that take user commands and output a fully characterized jsonl.gz 
-- [ ] get taxonium to accept a different column name than annotation 1
-- [ ] make data writing and directory handling consistent between scripts 
-- [ ] make an effort to use tmp files rather than hardcoding file names 
-- [ ] profile autolin to determine if parallelizing is worth doing 
-- [ ] do analyses to interpret the quality of grouping
-- [ ] use for viral usher  
-- [ ] make a release of these scripts as a standalone tool suite 
+
 
 
 
