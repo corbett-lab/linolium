@@ -153,49 +153,20 @@ function Taxonium({
 
   // Function to handle merging a lineage with its parent
   const handleMergeLineage = async (lineageName: string) => {
-    console.log('=== MERGE LINEAGE HANDLER CALLED ===');
-    console.log('lineageName:', lineageName);
-    console.log('backend:', backend);
-    console.log('backend.type:', backend?.type);
-    console.log('backend.backend_url:', backend?.backend_url);
-
-    // Find the parent lineage by removing the last segment
-    if (!lineageName.includes('.')) {
-      console.error(`Cannot merge root lineage "${lineageName}" - no parent lineage available`);
-      return;
-    }
-
-    const parts = lineageName.split('.');
-    parts.pop(); // Remove the last segment
-    const parentLineage = parts.join('.');
-
-    // Get the lineage field being used
     const field = colorBy.colorByField || 'meta_annotation_1';
 
-    console.log('Calculated parent lineage:', parentLineage);
-    console.log('Field to use:', field);
-
-    // Check if we have a backend server to call
     if (backend?.type !== 'server' || !backend.backend_url) {
-      console.error('No backend server available - lineage merging requires a backend server connection');
+      console.error('No backend server available for merge');
       return;
     }
 
     try {
-      console.log(`Merging ${lineageName} into parent ${parentLineage}`);
-      console.log('Backend URL:', backend.backend_url);
-      console.log('Field:', field);
+      console.log(`Merging ${lineageName} into its tree-parent`);
 
       const response = await fetch(`${backend.backend_url}/merge-lineage`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          lineageName,
-          parentLineage,
-          field
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineageName, field })
       });
 
       if (!response.ok) {
@@ -206,25 +177,20 @@ function Taxonium({
       const result = await response.json();
       console.log('Merge result:', result);
 
-      // Clear any existing lineage selection since the lineage has changed
       setSelectedLineage(null);
-
-      console.log('Refreshing lineage data after merge...');
-
-      // Refresh the lineage data to reflect the changes
       refreshLineageData();
 
-      // Add a small delay to ensure the refresh completes
-      setTimeout(() => {
-        console.log(`SUCCESS: ${result.message}`);
-        console.log(`Affected lineages: ${result.affectedLineages.join(', ')}`);
-        console.log('Lineage data refresh completed');
-      }, 500);
-
-      // The lineage data will be automatically refreshed via the hook
+      toast.success(`Merged "${lineageName}" into "${result.parentLineage}" (${result.mergedCount} nodes)`, {
+        duration: 4000,
+        position: 'top-center',
+      });
 
     } catch (error) {
       console.error('Error merging lineage:', error);
+      toast.error(`Failed to merge "${lineageName}": ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        duration: 6000,
+        position: 'top-center',
+      });
     }
   };
 

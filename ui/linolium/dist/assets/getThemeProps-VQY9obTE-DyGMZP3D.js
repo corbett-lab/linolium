@@ -1,1 +1,0 @@
-import{at as s,au as p}from"./JBrowsePanel-CjeUdi3D-Dhrr89W5.js";const a=s();function r(e){const{theme:o,name:t,props:n}=e;return!o||!o.components||!o.components[t]||!o.components[t].defaultProps?n:p(o.components[t].defaultProps,n)}export{a,r as m};
