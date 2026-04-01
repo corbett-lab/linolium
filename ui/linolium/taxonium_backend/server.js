@@ -568,156 +568,61 @@ app.get("/lineages", function (req, res) {
     }
   }
 
-  // Before processing clades, build a set of all lineages that actually exist in tips
-  const actualExistingLineages = new Set();
-  processedData.nodes.forEach(node => {
-    if (node.is_tip && node[field] && node[field] !== '') {
-      actualExistingLineages.add(node[field]);
-    }
-  });
-
   // Helper function to find parent lineage by walking up the tree
+  // Returns the first ancestor clade node with a different label
   const findParentLineage = (nodeId, currentCladeLabel) => {
     let currentNode = nodeLookup[nodeId];
     while (currentNode && currentNode.parent_id && currentNode.parent_id !== currentNode.node_id) {
       const parentNode = nodeLookup[currentNode.parent_id];
       if (parentNode && parentNode.clades && parentNode.clades.pango) {
         const parentClade = parentNode.clades.pango;
-        // Only return if it's a different clade and actually exists
-        if (parentClade !== currentCladeLabel && actualExistingLineages.has(parentClade)) {
+        if (parentClade !== currentCladeLabel) {
           return parentClade;
         }
       }
       currentNode = parentNode;
     }
-    return null; // No parent lineage found (this is a root lineage)
+    return null;
   };
 
-  // Second pass: for each clade, calculate its direct count and descendant info
-  // Count ALL descendant tips under this clade, including those with different lineage annotations
+  // Second pass: for each clade node, calculate counts and find parent from tree
+  // Include ALL clade nodes (even those without direct tips — they may be
+  // intermediate lineages needed for a correct hierarchy)
   for (const [cladeLabel, cladeNode] of cladeNodeMap.entries()) {
-    // Skip clades that don't correspond to existing lineages (i.e., merged away)
-    if (!actualExistingLineages.has(cladeLabel)) {
-      continue;
-    }
-
     const descendants = getAllDescendants(cladeNode.node_id);
 
-    // Count all descendant leaves and unique lineages
     const descendantLineageSet = new Set();
-    let totalTips = 0;  // ALL tips under this clade
-    let directTips = 0; // Tips with this exact lineage annotation
+    let totalTips = 0;
+    let directTips = 0;
 
     descendants.forEach(descId => {
       const descNode = nodeLookup[descId];
       if (descNode && descNode.is_tip) {
-        totalTips++;  // Count all tips
+        totalTips++;
         if (descNode[field] && descNode[field] !== '') {
-          // Track what lineages are under this clade
           if (descNode[field] !== cladeLabel) {
             descendantLineageSet.add(descNode[field]);
           } else {
-            directTips++;  // Tips directly assigned to this lineage
+            directTips++;
           }
         }
       }
     });
 
-    // Find the parent lineage by walking up the tree
     const parentLineage = findParentLineage(cladeNode.node_id, cladeLabel);
 
     lineageHierarchy.set(cladeLabel, {
       value: cladeLabel,
-      count: totalTips, // Total count is ALL descendant tips under this clade
+      count: totalTips,
       descendantLineages: descendantLineageSet.size,
       descendantLeaves: totalTips,
-      parent: parentLineage // Parent lineage from tree structure
+      parent: parentLineage
     });
   }
 
   console.log(`DEBUG: Found ${totalNodes} total nodes`);
   console.log(`DEBUG: Found ${cladeNodeMap.size} clade nodes`);
   console.log(`DEBUG: Built hierarchy for ${lineageHierarchy.size} lineages`);
-
-  // Add missing intermediate lineages by analyzing the hierarchy
-  const allLineageNames = Array.from(lineageHierarchy.keys());
-  const intermediateLineages = new Set();
-  
-  // Find all intermediate lineage names that should exist
-  allLineageNames.forEach(lineageName => {
-    const parts = lineageName.split('.');
-    // Only create intermediate lineages that have at least 2 parts and aren't too top-level
-    for (let i = 2; i < parts.length; i++) {  // Start from 2 to avoid creating "auto"
-      const intermediateName = parts.slice(0, i).join('.');
-      // Only create if it looks like a real lineage (has enough specificity)
-      if (!lineageHierarchy.has(intermediateName) && parts.length > 3) {
-        intermediateLineages.add(intermediateName);
-      }
-    }
-  });
-
-  // Calculate counts for intermediate lineages by aggregating from descendants
-  intermediateLineages.forEach(intermediateName => {
-    const descendantLineageSet = new Set();
-    let descendantLeaves = 0;
-    let directCount = 0;
-
-    // Find all lineages that are descendants of this intermediate lineage
-    allLineageNames.forEach(lineageName => {
-      if (lineageName.startsWith(intermediateName + '.')) {
-        const descendantData = lineageHierarchy.get(lineageName);
-        if (descendantData) {
-          descendantLeaves += descendantData.descendantLeaves;
-          // Only count this lineage as a descendant if it actually exists in the current tip data
-          if (actualExistingLineages.has(lineageName)) {
-            descendantLineageSet.add(lineageName);
-          }
-        }
-      }
-    });
-
-    // Only add the intermediate lineage if it has actual descendants or direct tips
-    // Check if any tips are directly assigned to this intermediate lineage
-    let directTipCount = 0;
-    processedData.nodes.forEach(node => {
-      if (node.is_tip && node[field] === intermediateName) {
-        directTipCount++;
-      }
-    });
-
-    // Only include this intermediate lineage if it has direct tips or valid descendants
-    if (directTipCount > 0 || descendantLineageSet.size > 0) {
-      lineageHierarchy.set(intermediateName, {
-        value: intermediateName,
-        count: descendantLeaves + directTipCount,
-        descendantLineages: descendantLineageSet.size,
-        descendantLeaves: descendantLeaves + directTipCount
-      });
-    }
-  });
-
-  console.log(`DEBUG: Added ${intermediateLineages.size} intermediate lineages`);
-  console.log(`DEBUG: Total lineages now: ${lineageHierarchy.size}`);
-
-  // Filter out redundant auto.X lineages where X also exists
-  // These represent the same clade - autolin creates auto.X as an intermediate
-  // but if X exists as an established lineage, we should use X
-  const allExistingLineages = new Set(lineageHierarchy.keys());
-  const toRemove = [];
-  
-  for (const [lineageName, lineageData] of lineageHierarchy.entries()) {
-    if (lineageName.startsWith('auto.')) {
-      const baseName = lineageName.substring(5);
-      if (allExistingLineages.has(baseName)) {
-        // The non-auto version exists, remove the auto version
-        toRemove.push(lineageName);
-        console.log(`DEBUG: Filtering out ${lineageName} because ${baseName} exists`);
-      }
-    }
-  }
-  
-  toRemove.forEach(name => lineageHierarchy.delete(name));
-  console.log(`DEBUG: Removed ${toRemove.length} redundant auto lineages`);
 
   // Convert to array format from our clade-based hierarchy
   const lineageArray = Array.from(lineageHierarchy.values());
@@ -843,75 +748,88 @@ app.post("/merge-lineage", function (req, res) {
   const start_time = Date.now();
   console.log("/merge-lineage - merging lineage assignments");
 
-  const { lineageName, parentLineage, field } = req.body;
+  const { lineageName, field } = req.body;
 
-  if (!lineageName || !parentLineage || !field) {
+  if (!lineageName || !field) {
     return res.status(400).send({
-      error: "Missing required parameters: lineageName, parentLineage, field"
+      error: "Missing required parameters: lineageName, field"
     });
   }
 
-  console.log(`Merging ${lineageName} and sublineages into ${parentLineage} for field ${field}`);
+  // Determine the parent lineage from the tree structure
+  // Find the clade node for this lineage, then walk up to find the parent clade
+  let parentLineage = null;
+  const nodeLookup = {};
+  processedData.nodes.forEach(node => { nodeLookup[node.node_id] = node; });
 
-  // Function to check if a lineage matches or is a sublineage
+  // Find this lineage's clade node
+  let cladeNode = null;
+  for (const node of processedData.nodes) {
+    if (!node.is_tip && node.clades && node.clades.pango === lineageName) {
+      cladeNode = node;
+      break;
+    }
+  }
+
+  if (cladeNode) {
+    // Walk up tree to find parent clade (including the root node)
+    let current = nodeLookup[cladeNode.parent_id];
+    while (current) {
+      if (current.clades && current.clades.pango && current.clades.pango !== lineageName) {
+        parentLineage = current.clades.pango;
+        break;
+      }
+      if (current.parent_id === current.node_id) break; // reached root
+      current = nodeLookup[current.parent_id];
+    }
+  }
+
+  if (!parentLineage) {
+    return res.status(400).send({
+      error: `Cannot merge "${lineageName}" - no parent lineage found in tree`
+    });
+  }
+
+  console.log(`Merging ${lineageName} (and sub-lineages) into ${parentLineage}`);
+
+  // Merge: reassign tips with this lineage or any sub-lineage to the parent
   const isLineageToMerge = (nodeLineage) => {
     return nodeLineage === lineageName || nodeLineage.startsWith(lineageName + '.');
   };
 
   let mergedCount = 0;
-  let affectedLineages = new Set();
+  const affectedLineages = new Set();
 
-  // Update all nodes in the dataset
-  if (processedData && processedData.nodes) {
-    processedData.nodes.forEach(node => {
-      let currentLineage = null;
+  processedData.nodes.forEach(node => {
+    if (node.is_tip && node[field] && isLineageToMerge(node[field])) {
+      affectedLineages.add(node[field]);
+      node[field] = parentLineage;
+      mergedCount++;
+    }
+  });
 
-      // Get current lineage from the specified field or fallback fields
-      if (field && node[field]) {
-        currentLineage = node[field];
-      } else if (node.lineage) {
-        currentLineage = node.lineage;
-      } else if (node.meta_pangolin_lineage) {
-        currentLineage = node.meta_pangolin_lineage;
-      } else if (node.meta && node.meta[field]) {
-        currentLineage = node.meta[field];
-      }
+  // Rebuild clade labels to reflect the new tip assignments
+  rebuildCladeLabels(field);
 
-      // If this node has a lineage we want to merge, reassign it
-      if (currentLineage && isLineageToMerge(currentLineage)) {
-        affectedLineages.add(currentLineage);
-
-        // Update the lineage field
-        if (field && node.hasOwnProperty(field)) {
-          node[field] = parentLineage;
-        } else if (node.lineage) {
-          node.lineage = parentLineage;
-        } else if (node.meta_pangolin_lineage) {
-          node.meta_pangolin_lineage = parentLineage;
-        } else if (node.meta && node.meta[field]) {
-          node.meta[field] = parentLineage;
-        }
-
-        mergedCount++;
-      }
-    });
-  }
-
-  console.log(`Merged ${mergedCount} nodes from lineages: ${Array.from(affectedLineages).join(', ')}`);
-  console.log(`Operation completed in ${Date.now() - start_time}ms`);
+  console.log(`Merged ${mergedCount} nodes into ${parentLineage} in ${Date.now() - start_time}ms`);
 
   res.send({
     success: true,
     mergedCount,
+    parentLineage,
     affectedLineages: Array.from(affectedLineages),
-    message: `Successfully merged ${mergedCount} samples into ${parentLineage}`
+    message: `Merged ${mergedCount} samples into ${parentLineage}`
   });
 });
 
-// Function to rebuild clade labels for internal nodes after lineage changes
+// Rebuild clade labels by finding the MRCA of each lineage's tips
 function rebuildCladeLabels(field) {
-  console.log('Starting clade label rebuild...');
-  
+  console.log('Rebuilding clade labels...');
+  const start = Date.now();
+
+  const nodeLookup = {};
+  processedData.nodes.forEach(node => { nodeLookup[node.node_id] = node; });
+
   // Clear existing clade labels
   processedData.nodes.forEach(node => {
     if (!node.is_tip && node.clades) {
@@ -919,121 +837,63 @@ function rebuildCladeLabels(field) {
     }
   });
 
-  // Build child relationships for traversal
-  const children = {};
+  // Collect tips per lineage
+  const lineageTips = {};
   processedData.nodes.forEach(node => {
-    if (node.parent_id && node.parent_id !== node.node_id) {
-      if (!children[node.parent_id]) {
-        children[node.parent_id] = [];
-      }
-      children[node.parent_id].push(node.node_id);
+    if (node.is_tip && node[field]) {
+      const lin = node[field];
+      if (!lineageTips[lin]) lineageTips[lin] = [];
+      lineageTips[lin].push(node.node_id);
     }
   });
 
-  // Create lookup for faster access
-  const nodeLookup = {};
+  // Compute depth for each node (used to find deepest common ancestor)
+  const depth = {};
   processedData.nodes.forEach(node => {
-    nodeLookup[node.node_id] = node;
+    if (depth[node.node_id] !== undefined) return;
+    const stack = [];
+    let cur = node;
+    while (depth[cur.node_id] === undefined) {
+      stack.push(cur.node_id);
+      if (cur.parent_id === cur.node_id) { depth[cur.node_id] = 0; stack.pop(); break; }
+      cur = nodeLookup[cur.parent_id];
+    }
+    let d = depth[cur.node_id];
+    while (stack.length > 0) {
+      d++;
+      depth[stack.pop()] = d;
+    }
   });
 
-  // Function to get the most specific common lineage for descendants of a node
-  function getMostSpecificCommonLineage(nodeId) {
-    const node = nodeLookup[nodeId];
-    if (!node) return null;
-
-    // If it's a tip, return its lineage
-    if (node.is_tip) {
-      let lineage = null;
-      if (field && node[field]) {
-        lineage = node[field];
-      } else if (node.lineage) {
-        lineage = node.lineage;
-      } else if (node.meta_pangolin_lineage) {
-        lineage = node.meta_pangolin_lineage;
-      } else if (node.meta && node.meta[field]) {
-        lineage = node.meta[field];
-      }
-      return lineage || null;
+  // LCA of two nodes: walk the deeper one up, then walk both up together
+  const lca = (a, b) => {
+    let na = a, nb = b;
+    while (depth[na] > depth[nb]) na = nodeLookup[na].parent_id;
+    while (depth[nb] > depth[na]) nb = nodeLookup[nb].parent_id;
+    while (na !== nb) {
+      na = nodeLookup[na].parent_id;
+      nb = nodeLookup[nb].parent_id;
     }
+    return na;
+  };
 
-    // For internal nodes, get lineages of all descendant tips
-    const descendantLineages = new Set();
-    
-    function collectDescendantLineages(currentNodeId) {
-      const currentNode = nodeLookup[currentNodeId];
-      if (!currentNode) return;
-
-      if (currentNode.is_tip) {
-        let lineage = null;
-        if (field && currentNode[field]) {
-          lineage = currentNode[field];
-        } else if (currentNode.lineage) {
-          lineage = currentNode.lineage;
-        } else if (currentNode.meta_pangolin_lineage) {
-          lineage = currentNode.meta_pangolin_lineage;
-        } else if (currentNode.meta && currentNode.meta[field]) {
-          lineage = currentNode.meta[field];
-        }
-        if (lineage) {
-          descendantLineages.add(lineage);
-        }
-      } else {
-        // Recurse to children
-        if (children[currentNodeId]) {
-          children[currentNodeId].forEach(childId => {
-            collectDescendantLineages(childId);
-          });
-        }
-      }
+  // For each lineage, find MRCA and set clade label
+  let cladeCount = 0;
+  for (const [lineage, tips] of Object.entries(lineageTips)) {
+    if (tips.length === 0) continue;
+    let mrca = tips[0];
+    for (let i = 1; i < tips.length; i++) {
+      mrca = lca(mrca, tips[i]);
     }
-
-    collectDescendantLineages(nodeId);
-    
-    if (descendantLineages.size === 0) return null;
-    if (descendantLineages.size === 1) {
-      // All descendants have the same lineage
-      return Array.from(descendantLineages)[0];
+    const mrcaNode = nodeLookup[mrca];
+    if (mrcaNode && !mrcaNode.is_tip) {
+      if (!mrcaNode.clades) mrcaNode.clades = {};
+      mrcaNode.clades.pango = lineage;
+      cladeCount++;
     }
-
-    // Multiple lineages - find most specific common ancestor lineage
-    const lineageArray = Array.from(descendantLineages);
-    let commonParts = lineageArray[0].split('.');
-    
-    for (let i = 1; i < lineageArray.length; i++) {
-      const parts = lineageArray[i].split('.');
-      const newCommon = [];
-      
-      for (let j = 0; j < Math.min(commonParts.length, parts.length); j++) {
-        if (commonParts[j] === parts[j]) {
-          newCommon.push(commonParts[j]);
-        } else {
-          break;
-        }
-      }
-      
-      commonParts = newCommon;
-      if (commonParts.length === 0) break;
-    }
-
-    return commonParts.length > 0 ? commonParts.join('.') : null;
   }
 
-  // Assign clade labels to internal nodes
-  let cladeCount = 0;
-  processedData.nodes.forEach(node => {
-    if (!node.is_tip) {
-      const commonLineage = getMostSpecificCommonLineage(node.node_id);
-      if (commonLineage) {
-        if (!node.clades) {
-          node.clades = {};
-        }
-        node.clades.pango = commonLineage;
-        cladeCount++;
-      }
-    }
-  });
-
-  console.log(`Rebuilt clade labels: ${cladeCount} internal nodes updated`);
+  console.log(`Rebuilt ${cladeCount} clade labels in ${Date.now() - start}ms`);
 }
 
 // POST endpoint to edit lineage root assignments based on selected tree node
@@ -1096,64 +956,80 @@ app.post("/edit-lineage-root", function (req, res) {
     return descendants;
   };
 
+  // Build a set of all lineages that are children of the edited lineage
+  // (so we don't overwrite more-specific annotations)
+  const childLineages = new Set();
+  processedData.nodes.forEach(node => {
+    if (!node.is_tip && node.clades && node.clades.pango) {
+      const clade = node.clades.pango;
+      if (clade !== lineageName && clade.startsWith(lineageName + '.')) {
+        childLineages.add(clade);
+      }
+      // Also check auto. children: auto.lineageName.X is a child
+      if (clade.startsWith('auto.' + lineageName + '.')) {
+        childLineages.add(clade);
+      }
+    }
+  });
+  // Also collect child lineages from tip annotations
+  processedData.nodes.forEach(node => {
+    if (node.is_tip && node[field]) {
+      const ann = node[field];
+      if (ann !== lineageName && ann.startsWith(lineageName + '.')) {
+        childLineages.add(ann);
+      }
+      if (ann.startsWith('auto.' + lineageName + '.')) {
+        childLineages.add(ann);
+      }
+    }
+  });
+
+  const isChildLineage = (ann) => childLineages.has(ann);
+
   // Get all nodes that should have this lineage (descendants of root node)
   const targetNodeIds = getDescendants(rootNodeId);
+
+  // Find the parent lineage to reassign displaced tips
+  let parentLineage = null;
+  let cur = nodeLookup[rootNode.parent_id];
+  while (cur) {
+    if (cur.clades && cur.clades.pango && cur.clades.pango !== lineageName) {
+      parentLineage = cur.clades.pango;
+      break;
+    }
+    if (cur.parent_id === cur.node_id) break; // reached root
+    cur = nodeLookup[cur.parent_id];
+  }
 
   let assignedCount = 0;
   let clearedCount = 0;
 
-  // Update all nodes in the dataset
   processedData.nodes.forEach(node => {
-    let currentLineage = null;
-
-    // Get current lineage
-    if (field && node[field]) {
-      currentLineage = node[field];
-    } else if (node.lineage) {
-      currentLineage = node.lineage;
-    } else if (node.meta_pangolin_lineage) {
-      currentLineage = node.meta_pangolin_lineage;
-    } else if (node.meta && node.meta[field]) {
-      currentLineage = node.meta[field];
-    }
+    if (!node.is_tip) return;
+    const currentLineage = node[field] || null;
 
     if (targetNodeIds.has(node.node_id)) {
-      // This node should have the lineage
-      if (currentLineage !== lineageName) {
-        // Assign the lineage
-        if (field && (node.hasOwnProperty(field) || !node.lineage)) {
-          node[field] = lineageName;
-        } else if (node.lineage) {
-          node.lineage = lineageName;
-        } else if (node.meta_pangolin_lineage) {
-          node.meta_pangolin_lineage = lineageName;
-        } else {
-          if (!node.meta) node.meta = {};
-          node.meta[field] = lineageName;
-        }
+      // Inside the new subtree: assign this lineage UNLESS the tip has a
+      // more-specific child lineage annotation
+      if (currentLineage !== lineageName && !isChildLineage(currentLineage)) {
+        node[field] = lineageName;
         assignedCount++;
       }
     } else if (currentLineage === lineageName) {
-      // This node should NOT have the lineage anymore, clear it
-      if (field && node[field] === lineageName) {
-        delete node[field];
-      } else if (node.lineage === lineageName) {
-        delete node.lineage;
-      } else if (node.meta_pangolin_lineage === lineageName) {
-        delete node.meta_pangolin_lineage;
-      } else if (node.meta && node.meta[field] === lineageName) {
-        delete node.meta[field];
+      // Outside the new subtree: reassign to parent lineage
+      if (parentLineage) {
+        node[field] = parentLineage;
+      } else {
+        node[field] = '';
       }
       clearedCount++;
     }
   });
 
-  console.log(`Assigned ${lineageName} to ${assignedCount} nodes, cleared from ${clearedCount} nodes`);
-  
-  // Rebuild clade labels for internal nodes after lineage changes
-  console.log('Rebuilding clade labels after lineage edit...');
+  console.log(`Assigned ${lineageName} to ${assignedCount} tips, displaced ${clearedCount} tips`);
+
   rebuildCladeLabels(field);
-  
+
   console.log(`Operation completed in ${Date.now() - start_time}ms`);
 
   res.send({
@@ -1161,7 +1037,8 @@ app.post("/edit-lineage-root", function (req, res) {
     assignedCount,
     clearedCount,
     totalAffected: targetNodeIds.size,
-    message: `Successfully reassigned ${lineageName} to ${assignedCount} nodes under root ${rootNodeId}`
+    parentLineage,
+    message: `Reassigned ${lineageName} to ${assignedCount} nodes under root ${rootNodeId}`
   });
 });
 

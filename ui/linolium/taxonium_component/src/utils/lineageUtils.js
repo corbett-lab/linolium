@@ -189,80 +189,21 @@ export const organizeLineageHierarchy = (lineages, nodeTypes = null) => {
   // Create a set of all lineage names for parent lookup
   const allLineageNames = new Set(Object.keys(lineageMap));
   
-  // Helper to get the parent for a lineage
-  // PREFER the backend-provided parent if available, otherwise fall back to parsing
+  // Get the parent for a lineage using the backend-provided tree-derived parent
   const getParent = (lineageName) => {
     const node = lineageMap[lineageName];
-    
-    // First: use backend-provided parent if it exists in our data
+
+    // Use backend-provided parent (derived from tree structure)
     if (node && node.backendParent && allLineageNames.has(node.backendParent)) {
       return node.backendParent;
     }
-    
-    // Fallback: parse parent from lineage name
-    // This handles cases where backend doesn't provide parent (e.g., intermediate nodes)
-    if (lineageName.startsWith('auto.')) {
-      const baseName = lineageName.substring(5);
-      const baseParts = baseName.split('.');
-      if (baseParts.length > 1) {
-        const parentBaseName = baseParts.slice(0, -1).join('.');
-        const autoParent = 'auto.' + parentBaseName;
-        
-        // Prefer non-auto parent if it exists
-        if (allLineageNames.has(parentBaseName)) {
-          return parentBaseName;
-        }
-        if (allLineageNames.has(autoParent)) {
-          return autoParent;
-        }
-        return parentBaseName; // Will need intermediate node
-      }
-      return allLineageNames.has(baseName) ? baseName : null;
-    }
-    
-    // Regular lineage
-    const parts = lineageName.split('.');
-    if (parts.length > 1) {
-      return parts.slice(0, -1).join('.');
-    }
+
+    // No backend parent — this is a root lineage
     return null;
   };
   
-  // Create intermediate parent nodes where needed
-  const createIntermediateParents = () => {
-    const lineagesToCheck = [...Object.keys(lineageMap)];
-    const created = new Set();
-    
-    for (const lineageName of lineagesToCheck) {
-      const parent = getParent(lineageName);
-      if (parent && !lineageMap[parent] && !created.has(parent)) {
-        // Need to create an intermediate parent
-        lineageMap[parent] = {
-          name: parent,
-          count: 0,
-          originalCount: 0,
-          sampleCount: 0,
-          internalCount: 0,
-          descendantLineages: 0,
-          descendantLeaves: 0,
-          color: generatePangoLineageColor(parent, processedLineages),
-          children: [],
-          isExpanded: false,
-          level: getLineageLevel(parent),
-          isIntermediate: true // Mark as synthesized
-        };
-        created.add(parent);
-        allLineageNames.add(parent);
-      }
-    }
-    
-    // Recursively check if the newly created parents also need parents
-    if (created.size > 0) {
-      createIntermediateParents();
-    }
-  };
-  
-  createIntermediateParents();
+  // No intermediate parent creation needed — the backend provides all lineage
+  // nodes (including those without direct tips) with tree-derived parents.
   
   // Second pass: Build the hierarchy and accumulate counts
   const rootLineages = [];

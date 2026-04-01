@@ -1,1 +1,0 @@
-import{j as o}from"./index-Bwk-R6QR.js";import{o as s,aa as m}from"./JBrowsePanel-CjeUdi3D-Dhrr89W5.js";import{j as i}from"./YScaleBars-DWcQfsXi-D3Iil5iT.js";import"./taxonium-component.es-D8UFPkMd.js";import"./util-B0sEnOgw-Ca3d5OPC.js";const j=s(function(r){const{model:t}=r;return o.jsxs("div",{children:[o.jsx(m,{...r}),o.jsx(i,{model:t})]})});export{j as default};

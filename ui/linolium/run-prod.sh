@@ -53,7 +53,7 @@ sleep 2
 # Start frontend server
 cd ..
 echo "🔄 Starting frontend on port 3000..."
-npx serve dist -l 3000 &
+npm run serve &
 FRONTEND_PID=$!
 
 echo ""

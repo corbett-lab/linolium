@@ -1,1 +1,0 @@
-import{j as t}from"./index-Bwk-R6QR.js";import{U as o}from"./JBrowsePanel-CjeUdi3D-Dhrr89W5.js";const e=o(t.jsx("path",{d:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"}),"Delete");export{e as r};
