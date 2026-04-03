@@ -2,10 +2,15 @@
 
 Automated phylogenetic lineage proposal and interactive curation.
 
+This tool provides an interactive environment for lineage discovery and curation on pathogen phylogenetic trees of virtually any size. It builds upon the original AutoLin algorithm for distance based identification of clades and provides an environment for customizing the algorithm to weight certain phenotypes more heavily in consideration of lineage designation. For more information on the AutoLin algorithm see ./autolin/README.md.
+
+## Usage
 **Input**: UShER MAT protobuf file (`.pb`)  
 **Output**: Proposed sub-lineages + interactive curation UI
 
 ## Build the Docker Container
+
+Clone this repository to desired location.
 
 ```bash
 # Build once
