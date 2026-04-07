@@ -1,1 +1,0 @@
-import{z as t,A as e}from"./JBrowsePanel-kHgxs8jI-DW6oCHAT.js";function l(i){return e("MuiDivider",i)}const n=t("MuiDivider",["root","absolute","fullWidth","inset","middle","flexItem","light","vertical","withChildren","withChildrenVertical","textAlignRight","textAlignLeft","wrapper","wrapperVertical"]);export{l,n as s};
