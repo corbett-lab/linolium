@@ -115,7 +115,7 @@ function Taxonium({
   const settings = useSettings({ query, updateQuery });
 
   // Add state for lineage sidebar visibility
-  const [lineageSidebarOpen, setLineageSidebarOpen] = useState(false);
+  const [lineageSidebarOpen, setLineageSidebarOpen] = useState(true);
 
   const view = useView({
     settings,
