@@ -43,8 +43,8 @@ python /app/autolin/propose_sublineages.py -i /data/input.pb -o /data/output.aut
 # Convert annotated tree to Taxonium format (creates output.autolin.jsonl.gz)
 python /app/autolin/convert_autolinpb_totax.py -a /data/output.autolin.pb
 
-# Generate sample-to-lineage TSV
-matUtils summary -i /data/output.autolin.pb -C /data/output.autolin.tsv
+# Generate sample-to-lineage TSV (cd / needed for matUtils path handling)
+cd / && matUtils summary -i /data/output.autolin.pb -C /data/output.autolin.tsv
 
 # Launch the curation UI with a pre-built jsonl.gz
 cd /app/ui/taxonium_backend && node server.js --port 8001 --data_file /data/output.autolin.jsonl.gz &
