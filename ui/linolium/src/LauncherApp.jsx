@@ -708,7 +708,7 @@ function LauncherApp({ onLaunchTaxonium, onDownloadsReady }) {
 
       <div className="launcher-card">
         <header className="launcher-header">
-          <h1 className="launcher-title">Lineage Curation</h1>
+          <h1 className="launcher-title">Linolium</h1>
           <p className="launcher-subtitle">
             Upload a protobuf tree, configure parameters, and launch the viewer
           </p>
