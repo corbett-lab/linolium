@@ -77,7 +77,7 @@ source /opt/conda/etc/profile.d/conda.sh\n\
 conda activate taxalin\n\
 \n\
 echo ""\n\
-echo "🧬 Lineage Curation Launcher"\n\
+echo "🧬 Linolium"\n\
 echo ""\n\
 \n\
 # Start backend server in launcher mode (no data file)\n\
