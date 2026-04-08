@@ -5,41 +5,27 @@ Automated phylogenetic lineage proposal and interactive curation.
 This tool provides an interactive environment for lineage discovery and curation on pathogen phylogenetic trees of virtually any size. It builds upon the original AutoLin algorithm for distance based identification of clades and provides an environment for customizing the algorithm to weight certain phenotypes more heavily in consideration of lineage designation. For more information on the AutoLin algorithm see ./autolin/README.md.
 
 ## Usage
-**Input**: UShER MAT protobuf file (`.pb`)  
+**Input**: UShER MAT protobuf file (`.pb` or `.pb.gz`)  
 **Output**: Proposed sub-lineages + interactive curation UI
 
-## Build the Docker Container
-
-Clone this repository to desired location.
+## Quick Start
 
 ```bash
-# Build once
 docker build -t lineage-curation .
-
+docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
 ```
 
-## Run Autolin
+Open http://localhost:3000, upload a `.pb` (or `.pb.gz`) file, configure parameters, and run the pipeline. Results can be downloaded as `.jsonl.gz`, `.pb.gz`, or `.tsv` from the UI.
+
+## Development
+
+For faster iteration without rebuilding the image:
+
 ```bash
-# Interactive mode with ports exposed
-docker run -it -v "$PWD":/workspace -p 3000:3000 -p 8001:8001 lineage-curation
-
-# Inside container - generate lineage proposals for an input UShER tree, create output tree with proposed lineage annotations
-cd /workspace/autolin
-python propose_sublineages.py -i /workspace/<input_tree>.pb -o /workspace/<tree_with_lineages>.pb
-
-# Convert Autolin output tree to Taxonium format. Creates <tree_with_lineages>.jsonl.gz file in same directory as <tree_with_lineages>.pb
-python convert_autolinpb_totax.py -a /workspace/<tree_with_lineages>.pb
+./dev.sh
 ```
 
-## Run Lineage Curation UI
-```bash
-cd /workspace/ui/linolium
-./run-prod.sh /workspace/<tree_with_lineages>.jsonl.gz # Starts frontend web UI on port 3000, backend on 8001
-```
-
-## View and edit lineages in UI
-
-Open http://localhost:3000 in a web browser 
+This mounts source files into the container and uses vite's dev server with hot reload.
 
 ## Components
 
