@@ -11,6 +11,12 @@ This tool provides an interactive environment for lineage discovery and curation
 ## Quick Start
 
 ```bash
+docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 ghcr.io/corbett-lab/lineage-curation
+```
+
+Or build locally:
+
+```bash
 docker build -t lineage-curation .
 docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
 ```
