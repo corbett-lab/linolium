@@ -17,16 +17,6 @@ docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
 
 Open http://localhost:3000, upload a `.pb` (or `.pb.gz`) file, configure parameters, and run the pipeline. Results can be downloaded as `.jsonl.gz`, `.pb.gz`, or `.tsv` from the UI.
 
-## Development
-
-For faster iteration without rebuilding the image:
-
-```bash
-./dev.sh
-```
-
-This mounts source files into the container and uses vite's dev server with hot reload.
-
 ## Advanced: Manual Pipeline
 
 To run the individual steps manually inside the container:
@@ -58,3 +48,13 @@ See `python /app/autolin/propose_sublineages.py --help` for all parameter option
 - **[autolin/](autolin/)** - Autolin algorithm for lineage proposals
 - **[ui/](ui/)** - Web interface for curation
 - **[recombination-detection/](recombination-detection/)** - Recombination analysis
+
+## Development
+
+For faster iteration without rebuilding the image:
+
+```bash
+./dev.sh
+```
+
+This mounts source files into the container and uses vite's dev server with hot reload.
