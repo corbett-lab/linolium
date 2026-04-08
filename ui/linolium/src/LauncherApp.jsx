@@ -81,22 +81,22 @@ function LauncherApp({ onLaunchTaxonium }) {
     setIsDragging(false);
 
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.name.endsWith('.pb')) {
+    if (droppedFile && (droppedFile.name.endsWith('.pb') || droppedFile.name.endsWith('.pb.gz'))) {
       setFile(droppedFile);
       addLog(`Selected file: ${droppedFile.name} (${(droppedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     } else {
-      addLog('Please select a .pb file', 'error');
+      addLog('Please select a .pb or .pb.gz file', 'error');
     }
   }, [addLog]);
 
   // Handle file input change
   const handleFileChange = useCallback((e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile && selectedFile.name.endsWith('.pb')) {
+    if (selectedFile && (selectedFile.name.endsWith('.pb') || selectedFile.name.endsWith('.pb.gz'))) {
       setFile(selectedFile);
       addLog(`Selected file: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     } else if (selectedFile) {
-      addLog('Please select a .pb file', 'error');
+      addLog('Please select a .pb or .pb.gz file', 'error');
     }
   }, [addLog]);
 
@@ -704,7 +704,7 @@ function LauncherApp({ onLaunchTaxonium }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pb"
+            accept=".pb,.pb.gz"
             onChange={handleFileChange}
             style={{ display: 'none' }}
             disabled={isRunning}

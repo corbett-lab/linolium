@@ -182,14 +182,27 @@ app.post("/run-autolin", async function (req, res) {
   };
 
   try {
-    const basename = path.basename(inputFile, ".pb");
+    const isGzipped = inputFile.endsWith(".pb.gz");
+    const basename = isGzipped
+      ? path.basename(inputFile, ".pb.gz")
+      : path.basename(inputFile, ".pb");
     const outputDir = path.dirname(inputFile);
+
+    // Decompress .pb.gz to .pb if needed
+    let actualInput = inputFile;
+    if (isGzipped) {
+      const zlib = require("zlib");
+      actualInput = path.join(outputDir, `${basename}.pb`);
+      const compressed = fs.readFileSync(inputFile);
+      fs.writeFileSync(actualInput, zlib.gunzipSync(compressed));
+    }
+
     const autolinPb = path.join(outputDir, `${basename}.autolin.pb`);
     const jsonlOutput = path.join(outputDir, `${basename}.autolin.jsonl.gz`);
 
     // Determine autolin directory (relative to this script or in /app for Docker)
-    const autolinDir = fs.existsSync("/app/autolin") 
-      ? "/app/autolin" 
+    const autolinDir = fs.existsSync("/app/autolin")
+      ? "/app/autolin"
       : path.resolve(__dirname, "../../autolin");
 
     sendEvent("stage", { stage: "proposing" });
@@ -199,7 +212,7 @@ app.post("/run-autolin", async function (req, res) {
     // Build command arguments for propose_sublineages.py
     const proposeArgs = [
       "propose_sublineages.py",
-      "-i", inputFile,
+      "-i", actualInput,
       "-o", autolinPb,
       "-m", String(params?.minsamples || 10),
       "-t", String(params?.distinction || 1),

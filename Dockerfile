@@ -37,22 +37,23 @@ RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkg
 RUN conda install -n base mamba
 
 # Create Python environment
-WORKDIR /workspace
-COPY env.yml /workspace/env.yml
+WORKDIR /app
+COPY env.yml /app/env.yml
 RUN conda env create -f env.yml && conda clean -afy
 
 
 # Copy Python tools
-COPY autolin /workspace/autolin
-COPY data /workspace/data
+COPY autolin /app/autolin
+COPY data /app/data
 
-# Build UI (in /workspace so it's separate from mounted /workspace)
-COPY ui/linolium /workspace/ui
-WORKDIR /workspace/ui
+# Build UI
+COPY ui/linolium /app/ui
+WORKDIR /app/ui
 RUN npm run install-all && NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
 
-WORKDIR /workspace
+WORKDIR /app
+RUN mkdir -p /data
 EXPOSE 3000 8001
 
 # Setup shell
@@ -72,7 +73,7 @@ echo "🧬 Lineage Curation Launcher"\n\
 echo ""\n\
 \n\
 # Start backend server in launcher mode (no data file)\n\
-cd /workspace/ui/taxonium_backend\n\
+cd /app/ui/taxonium_backend\n\
 echo "🔌 Starting backend on port 8001..."\n\
 node server.js --port 8001 &\n\
 BACKEND_PID=$!\n\
@@ -81,7 +82,7 @@ BACKEND_PID=$!\n\
 sleep 2\n\
 \n\
 # Start frontend server\n\
-cd /workspace/ui\n\
+cd /app/ui\n\
 echo "🌐 Starting frontend on port 3000..."\n\
 npx vite preview --port 3000 --host 0.0.0.0 &\n\
 FRONTEND_PID=$!\n\
@@ -94,6 +95,6 @@ echo ""\n\
 \n\
 # Wait for either process to exit\n\
 wait\n\
-' > /workspace/start.sh && chmod +x /workspace/start.sh
+' > /opt/start.sh && chmod +x /opt/start.sh
 
-CMD ["/workspace/start.sh"]
+CMD ["/opt/start.sh"]
