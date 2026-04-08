@@ -8,27 +8,9 @@ import gzip
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process phenotype data.")
-    parser.add_argument(
-        "--metadata_file",
-        '-m',
-        type=str,
-        required=True,
-        help="Path to the input metadata file. Note: this script currently expects a tab-delimited file with a header line. Other formats may not work correctly.",
-    )
-    parser.add_argument(
-        "--mat",
-        "-t",
-        type=str,
-        required=True,
-        help="Path to the input mutation annotated tree",
-    )
-    parser.add_argument(
-        "--column-name",
-        "-c",
-        type=str,
-        required=True,
-        help="Name of the column to extract from the metadata file. NOTE: Must exactly match the header name in the metadata file.",
-    )
+    parser.add_argument("--metadata_file", '-m', type=str, required=True, help="Path to the input metadata file. Note: this script currently expects a tab-delimited file with a header line. Other formats may not work correctly.")
+    parser.add_argument("--mat", "-t", type=str, required=True, help="Path to the input mutation annotated tree")
+    parser.add_argument("--column-name", "-c", type=str, required=True, help="Name of the column to extract from the metadata file. NOTE: Must exactly match the header name in the metadata file.",)
     '''
     parser.add_argument(
         "--run_autolin",
@@ -37,13 +19,7 @@ def parse_args():
         help="If flagged, autolin will run from this script with the -p flag and generated weights ",
     )
     '''
-    parser.add_argument(
-        "--output_file", 
-        '-o',
-        type=str,
-        required=True,
-        help="Path to the output file.",
-    )
+    parser.add_argument("--output_file", '-o', type=str, required=True, help="Path to the output file.",)
     return parser.parse_args()
 
 def get_samples(tree):
