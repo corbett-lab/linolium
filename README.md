@@ -1,4 +1,4 @@
-# Lineage Curation
+# Linolium
 
 Automated phylogenetic lineage proposal and interactive curation.
 
