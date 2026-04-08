@@ -47,6 +47,7 @@ interface LineageToolsProps {
   config?: any;
   deckSize?: { width: number; height: number } | null;
   boundsForQueries?: any;
+  pipelineDownloads?: { name: string; path: string }[];
 }
 
 // Create a deep comparator for memoization to avoid unnecessary re-renders
@@ -63,6 +64,8 @@ const arePropsEqual = (prevProps: LineageToolsProps, nextProps: LineageToolsProp
   // For keyStuff, check if the reference has changed
   // This ensures we process new data when it's available
   if (prevProps.keyStuff !== nextProps.keyStuff) return false;
+
+  if (prevProps.pipelineDownloads !== nextProps.pipelineDownloads) return false;
 
   // If we get here, props are considered equal
   return true;
@@ -90,7 +93,8 @@ const LineageTools = React.memo<LineageToolsProps>(({
   backend,
   config,
   deckSize,
-  boundsForQueries
+  boundsForQueries,
+  pipelineDownloads
 }) => {
   const [hierarchyData, setHierarchyData] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState({});
@@ -225,6 +229,28 @@ const LineageTools = React.memo<LineageToolsProps>(({
     } catch (error) {
       console.error('Error exporting JSONL:', error);
       toast.error('Failed to export JSONL');
+    }
+  }, [backend]);
+
+  // Handle export protobuf
+  const handleExportPb = useCallback(async () => {
+    if (!backend || backend.type !== 'server' || !backend.backend_url) {
+      toast.error('Export requires server backend');
+      return;
+    }
+
+    try {
+      toast('Generating .pb.gz (this may take a moment)...');
+      const url = `${backend.backend_url}/export/pb`;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'exported_tree.pb.gz';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting pb:', error);
+      toast.error('Failed to export protobuf');
     }
   }, [backend]);
 
@@ -716,32 +742,33 @@ const LineageTools = React.memo<LineageToolsProps>(({
 
         </div>
 
-        {/* Export Section */}
-        <div className="px-3 py-2 border-b bg-blue-50 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-blue-800">
-              Export Current Tree
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleExportJsonl}
-                className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded border-0 cursor-pointer font-medium transition-colors"
-                title="Export tree in Taxonium JSONL format"
-              >
-                JSONL
-              </button>
-              <button
-                onClick={handleExportMetadata}
-                className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded border-0 cursor-pointer font-medium transition-colors"
-                title="Export metadata as TSV file"
-              >
-                Metadata TSV
-              </button>
-            </div>
+        {/* Downloads */}
+        <div className="px-2 py-1.5 border-b border-gray-200" style={{ fontSize: '10px', lineHeight: '18px' }}>
+          <div className="flex items-center gap-1 text-gray-400 mb-0.5">
+            <span style={{ width: '42px', flexShrink: 0 }}></span>
+            <span className="flex-1 text-center">Taxonium tree</span>
+            <span className="flex-1 text-center">UShER tree</span>
+            <span className="flex-1 text-center">Lineage assignments</span>
           </div>
-          <div className="text-xs text-blue-600 mt-1">
-            Exports reflect current lineage assignments
+          <div className="flex items-center gap-1 text-gray-500">
+            <span className="text-gray-400" style={{ width: '42px', flexShrink: 0 }}>Edited</span>
+            <button onClick={handleExportJsonl} className="flex-1 text-blue-600 hover:text-blue-800 underline bg-transparent border-0 cursor-pointer p-0 text-center" style={{ fontSize: '10px' }} title="Reflects edits">.jsonl.gz</button>
+            <button onClick={handleExportPb} className="flex-1 text-blue-600 hover:text-blue-800 underline bg-transparent border-0 cursor-pointer p-0 text-center" style={{ fontSize: '10px' }} title="Reflects edits">.pb.gz</button>
+            <button onClick={handleExportMetadata} className="flex-1 text-blue-600 hover:text-blue-800 underline bg-transparent border-0 cursor-pointer p-0 text-center" style={{ fontSize: '10px' }} title="Reflects edits">.tsv</button>
           </div>
+          {pipelineDownloads && pipelineDownloads.length > 0 && (
+            <div className="flex items-center gap-1 text-gray-500">
+              <span className="text-gray-400" style={{ width: '42px', flexShrink: 0 }}>Original</span>
+              {['.jsonl.gz', '.pb.gz', '.tsv'].map(ext => {
+                const dl = pipelineDownloads.find(d => d.name.endsWith(ext));
+                return dl ? (
+                  <a key={ext} href={`http://localhost:8001/download?path=${encodeURIComponent(dl.path)}`} download={dl.name} className="flex-1 text-center text-gray-500 hover:text-gray-700 underline" style={{ fontSize: '10px' }}>{ext}</a>
+                ) : (
+                  <span key={ext} className="flex-1 text-center text-gray-300" style={{ fontSize: '10px' }}>{ext}</span>
+                );
+              })}
+            </div>
+          )}
         </div>
           
           {/* Lineage list - Always hierarchical */}
