@@ -27,6 +27,32 @@ For faster iteration without rebuilding the image:
 
 This mounts source files into the container and uses vite's dev server with hot reload.
 
+## Advanced: Manual Pipeline
+
+To run the individual steps manually inside the container:
+
+```bash
+docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation bash
+```
+
+```bash
+# Propose lineages on an input tree
+python /app/autolin/propose_sublineages.py -i /data/input.pb -o /data/output.autolin.pb \
+  -m 10 -t 1 -u 0.95 -r
+
+# Convert annotated tree to Taxonium format (creates output.autolin.jsonl.gz)
+python /app/autolin/convert_autolinpb_totax.py -a /data/output.autolin.pb
+
+# Generate sample-to-lineage TSV
+matUtils summary -i /data/output.autolin.pb -C /data/output.autolin.tsv
+
+# Launch the curation UI with a pre-built jsonl.gz
+cd /app/ui/taxonium_backend && node server.js --port 8001 --data_file /data/output.autolin.jsonl.gz &
+cd /app/ui && npx vite preview --port 3000 --host 0.0.0.0
+```
+
+See `python /app/autolin/propose_sublineages.py --help` for all parameter options.
+
 ## Components
 
 - **[autolin/](autolin/)** - Autolin algorithm for lineage proposals
