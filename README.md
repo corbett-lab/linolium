@@ -1,4 +1,4 @@
-# Linolium
+## Linolium
 
 Automated phylogenetic lineage proposal and interactive curation.
 
@@ -8,11 +8,13 @@ This tool provides an interactive environment for lineage discovery and curation
 **Input**: UShER MAT protobuf file (`.pb` or `.pb.gz`)  
 **Output**: Proposed sub-lineages + interactive curation UI
 
-## Quick Start
+#### Quick Start
 
 ```bash
 docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 ghcr.io/corbett-lab/lineage-curation
 ```
+
+Then open http://localhost:3000, upload a .pb (or .pb.gz) file, configure parameters, and run the pipeline. Results can be downloaded as .jsonl.gz, .pb.gz, or .tsv from the UI.
 
 Or build locally:
 
@@ -23,7 +25,7 @@ docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
 
 Open http://localhost:3000, upload a `.pb` (or `.pb.gz`) file, configure parameters, and run the pipeline. Results can be downloaded as `.jsonl.gz`, `.pb.gz`, or `.tsv` from the UI.
 
-## Advanced: Manual Pipeline
+#### Advanced: Manual Pipeline
 
 To run the individual steps manually inside the container:
 
@@ -49,13 +51,13 @@ cd /app/ui && npx vite preview --port 3000 --host 0.0.0.0
 
 See `python /app/autolin/propose_sublineages.py --help` for all parameter options.
 
-## Components
+### Components
 
 - **[autolin/](autolin/)** - Autolin algorithm for lineage proposals
 - **[ui/](ui/)** - Web interface for curation
 - **[recombination-detection/](recombination-detection/)** - Recombination analysis
 
-## Development
+### Development
 
 For faster iteration without rebuilding the image:
 
