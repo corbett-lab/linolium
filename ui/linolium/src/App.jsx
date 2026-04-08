@@ -174,33 +174,33 @@ function App() {
   // Backend is ready, show Taxonium
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
-      {/* Back button */}
-      <div style={{ 
-        position: 'absolute', 
-        top: '10px', 
-        left: '10px', 
-        zIndex: 1000 
+      {/* Top bar */}
+      <div style={{
+        background: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0',
+        padding: '4px 10px',
+        display: 'flex',
+        alignItems: 'center',
+        flexShrink: 0,
       }}>
-        <button 
+        <button
           onClick={handleBackToLauncher}
           style={{
-            background: '#ffffff',
-            color: '#475569',
-            border: '1px solid #d1d5db',
-            borderRadius: '6px',
-            padding: '6px 12px',
+            background: 'transparent',
+            color: '#64748b',
+            border: 'none',
             cursor: 'pointer',
             fontSize: '13px',
+            padding: '2px 6px',
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
           }}
         >
           ← Back
         </button>
       </div>
-      <div className="h-full">
+      <div className="h-full" style={{ flex: 1, minHeight: 0 }}>
         <Suspense fallback={<LoadingScreen message="Loading viewer components..." />}>
           <Taxonium
             backendUrl="http://localhost:8001"
