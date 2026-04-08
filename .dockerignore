@@ -1,0 +1,7 @@
+.git
+.claude
+ui/linolium/node_modules
+ui/linolium/dist
+**/__pycache__
+**/*.pyc
+.DS_Store

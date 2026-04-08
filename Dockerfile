@@ -36,23 +36,31 @@ RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkg
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 RUN conda install -n base mamba
 
-# Create Python environment
+# Create Python environment (only rebuilds when env.yml changes)
 WORKDIR /app
 COPY env.yml /app/env.yml
 RUN conda env create -f env.yml && conda clean -afy
 
+# Install Node deps (only rebuilds when package*.json change)
+WORKDIR /app/ui
+COPY ui/linolium/package.json ui/linolium/package-lock.json ./
+COPY ui/linolium/taxonium_component/package.json ./taxonium_component/
+COPY ui/linolium/taxonium_data_handling/package.json ./taxonium_data_handling/
+COPY ui/linolium/taxonium_backend/package.json ./taxonium_backend/
+RUN npm install && \
+    cd taxonium_component && npm install && \
+    cd ../taxonium_data_handling && npm install && \
+    cd ../taxonium_backend && npm install
 
-# Copy Python tools
+# Copy source and build UI (rebuilds on any source change, but deps are cached)
+COPY ui/linolium /app/ui
+RUN NODE_OPTIONS="--max-old-space-size=8192" npm run build
+
+# Copy Python tools and data
+WORKDIR /app
 COPY autolin /app/autolin
 COPY data /app/data
 
-# Build UI
-COPY ui/linolium /app/ui
-WORKDIR /app/ui
-RUN npm run install-all && NODE_OPTIONS="--max-old-space-size=8192" npm run build
-
-
-WORKDIR /app
 RUN mkdir -p /data
 EXPOSE 3000 8001
 
