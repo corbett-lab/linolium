@@ -77,6 +77,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [outputFile, setOutputFile] = useState(null)
+  const [pipelineDownloads, setPipelineDownloads] = useState([])
   
   // Check if backend has loaded data (not just running)
   const checkDataReady = async () => {
@@ -148,7 +149,7 @@ function App() {
 
   // Show launcher view
   if (view === 'launcher' && !isLoading) {
-    return <LauncherApp onLaunchTaxonium={handleLaunchTaxonium} />
+    return <LauncherApp onLaunchTaxonium={handleLaunchTaxonium} onDownloadsReady={setPipelineDownloads} />
   }
   
   // Show loading state with nice UI
@@ -204,6 +205,7 @@ function App() {
           <Taxonium
             backendUrl="http://localhost:8001"
             sidePanelHiddenByDefault={false}
+            pipelineDownloads={pipelineDownloads}
           />
         </Suspense>
       </div>

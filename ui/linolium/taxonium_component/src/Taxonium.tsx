@@ -53,6 +53,7 @@ interface TaxoniumProps {
   onNodeSelect?: NodeSelectHandler;
   onNodeDetailsLoaded?: NodeDetailsLoadedHandler;
   sidePanelHiddenByDefault?: boolean;
+  pipelineDownloads?: { name: string; path: string }[];
 }
 
 
@@ -75,6 +76,7 @@ function Taxonium({
   onNodeSelect,
   onNodeDetailsLoaded,
   sidePanelHiddenByDefault,
+  pipelineDownloads,
 }: TaxoniumProps) {
   const [backupQuery, setBackupQuery] = useState(default_query);
   const backupUpdateQuery = useCallback((newQuery: Partial<Query>) => {
@@ -456,6 +458,7 @@ function Taxonium({
           config={config}
           deckSize={deckSize}
           boundsForQueries={boundsForQueries}
+          pipelineDownloads={pipelineDownloads}
         />
 
         <div className="flex flex-col md:flex-row overflow-hidden flex-grow">

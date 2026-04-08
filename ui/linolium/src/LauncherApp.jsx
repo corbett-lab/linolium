@@ -32,7 +32,7 @@ const STAGE_LABELS = {
   [STAGES.ERROR]: 'Error'
 };
 
-function LauncherApp({ onLaunchTaxonium }) {
+function LauncherApp({ onLaunchTaxonium, onDownloadsReady }) {
   // File state
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -58,6 +58,7 @@ function LauncherApp({ onLaunchTaxonium }) {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
   const [outputFile, setOutputFile] = useState(null);
+  const [downloads, setDownloads] = useState([]);
 
   // Logs container ref for auto-scroll
   const logsRef = useRef(null);
@@ -200,7 +201,9 @@ function LauncherApp({ onLaunchTaxonium }) {
                 setProgress(40);
               } else if (data.stage === 'converting') {
                 setStage(STAGES.CONVERTING);
-                setProgress(70);
+                setProgress(60);
+              } else if (data.stage === 'summary') {
+                setProgress(80);
               }
             } else if (data.type === 'complete') {
               pipelineResult = data;
@@ -223,6 +226,10 @@ function LauncherApp({ onLaunchTaxonium }) {
       setProgress(90);
       addLog(`Pipeline complete! Output: ${pipelineResult.outputFile}`, 'success');
       setOutputFile(pipelineResult.outputFile);
+      if (pipelineResult.downloads) {
+        setDownloads(pipelineResult.downloads);
+        if (onDownloadsReady) onDownloadsReady(pipelineResult.downloads);
+      }
 
       // Stage 3: Load viewer
       setStage(STAGES.LOADING);
@@ -563,6 +570,20 @@ function LauncherApp({ onLaunchTaxonium }) {
           font-weight: 500;
         }
 
+        .downloads-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .download-btn {
+          flex: none;
+          font-size: 0.8rem;
+          text-decoration: none;
+          padding: 0.5rem 0.75rem;
+        }
+
         .logs-container {
           background: #1e293b;
           border-radius: 6px;
@@ -719,7 +740,7 @@ function LauncherApp({ onLaunchTaxonium }) {
           ) : (
             <>
               <div className="drop-icon">↑</div>
-              <div className="drop-text">Drop .pb file here or click to browse</div>
+              <div className="drop-text">Drop .pb (.gz) file here or click to browse</div>
               <div className="drop-hint">Protobuf phylogenetic tree file</div>
             </>
           )}
@@ -895,12 +916,29 @@ function LauncherApp({ onLaunchTaxonium }) {
                 setStage(STAGES.IDLE);
                 setLogs([]);
                 setError(null);
+                setDownloads([]);
               }}
             >
               Clear
             </button>
           )}
         </div>
+
+        {/* Download Results */}
+        {downloads.length > 0 && stage === STAGES.COMPLETE && (
+          <div className="downloads-row">
+            {downloads.map((dl, i) => (
+              <a
+                key={i}
+                className="btn btn-secondary download-btn"
+                href={`http://localhost:8001/download?path=${encodeURIComponent(dl.path)}`}
+                download={dl.name}
+              >
+                {dl.name.endsWith('.tsv') ? '.tsv' : dl.name.endsWith('.pb.gz') ? '.pb.gz' : '.jsonl.gz'}
+              </a>
+            ))}
+          </div>
+        )}
 
         {/* Logs */}
         {logs.length > 0 && (

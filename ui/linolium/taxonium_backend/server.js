@@ -18,6 +18,15 @@ const multer = require("multer");
 var parser = require("stream-json").parser;
 var streamValues = require("stream-json/streamers/StreamValues").streamValues;
 
+// Resolve conda tool paths at startup
+const condirPrefix = process.env.CONDA_PREFIX || "/opt/conda/envs/taxalin";
+const matUtilsPath = fs.existsSync(`${condirPrefix}/bin/matUtils`)
+  ? `${condirPrefix}/bin/matUtils`
+  : "matUtils";
+const pythonPath = fs.existsSync(`${condirPrefix}/bin/python`)
+  ? `${condirPrefix}/bin/python`
+  : "python";
+
 var importing;
 var filtering;
 var exporting;
@@ -48,8 +57,9 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 * 1024 } // 5GB limit
 });
 
-// Track pipeline output file for dynamic reloading
+// Track pipeline output files for dynamic reloading and export
 let pipelineOutputFile = null;
+let pipelineInputPb = null;
 
 // Lock to prevent multiple simultaneous data reloads
 let reloadInProgress = false;
@@ -119,6 +129,19 @@ waitForTheImports = async () => {
 
 var processedData = null;
 var cached_starting_values = null;
+var originalLineages = new Map();
+
+function snapshotLineages() {
+  originalLineages.clear();
+  if (!processedData || !processedData.nodes) return;
+  processedData.nodes.forEach(node => {
+    const lineage = node.meta_annotation_1 || node.meta_lineage ||
+      node.meta_pango_lineage || node.meta_Nextclade_pango ||
+      node.meta_pangolin_lineage || node.lineage || '';
+    originalLineages.set(node.node_id, lineage);
+  });
+  console.log(`Snapshotted lineages for ${originalLineages.size} nodes`);
+}
 
 let options;
 
@@ -228,9 +251,7 @@ app.post("/run-autolin", async function (req, res) {
 
     // Run propose_sublineages.py
     await new Promise((resolve, reject) => {
-      const pythonCmd = process.env.CONDA_PREFIX 
-        ? `${process.env.CONDA_PREFIX}/bin/python`
-        : "python";
+      const pythonCmd = pythonPath;
       
       const propose = spawn(pythonCmd, proposeArgs, {
         cwd: autolinDir,
@@ -274,9 +295,7 @@ app.post("/run-autolin", async function (req, res) {
     sendEvent("log", { message: `Running: python ${convertArgs.join(" ")}` });
 
     await new Promise((resolve, reject) => {
-      const pythonCmd = process.env.CONDA_PREFIX 
-        ? `${process.env.CONDA_PREFIX}/bin/python`
-        : "python";
+      const pythonCmd = pythonPath;
       
       const convert = spawn(pythonCmd, convertArgs, {
         cwd: autolinDir,
@@ -308,11 +327,63 @@ app.post("/run-autolin", async function (req, res) {
 
     sendEvent("log", { message: "Conversion completed successfully" });
 
-    // Store the output file for the reload endpoint
-    pipelineOutputFile = jsonlOutput;
+    // Stage 3: Generate TSV with matUtils summary
+    const tsvOutput = path.join(outputDir, `${basename}.autolin.tsv`);
+    sendEvent("stage", { stage: "summary" });
+    sendEvent("log", { message: "Generating sample lineage assignments (TSV)..." });
 
-    sendEvent("complete", { 
+    await new Promise((resolve, reject) => {
+      const matUtilsCmd = matUtilsPath;
+      const matUtils = spawn(matUtilsCmd, ["summary", "-i", autolinPb, "-C", tsvOutput], {
+        cwd: "/",
+        env: { ...process.env }
+      });
+
+      matUtils.stderr.on("data", (data) => {
+        const lines = data.toString().split("\n").filter(l => l.trim());
+        lines.forEach(line => sendEvent("log", { message: line }));
+      });
+
+      matUtils.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          // Non-fatal: TSV is optional
+          sendEvent("log", { message: `matUtils summary exited with code ${code}, TSV not generated` });
+          resolve();
+        }
+      });
+
+      matUtils.on("error", (err) => {
+        sendEvent("log", { message: `matUtils not available: ${err.message}` });
+        resolve();
+      });
+    });
+
+    if (fs.existsSync(tsvOutput)) {
+      sendEvent("log", { message: "TSV generated successfully" });
+    }
+
+    // Compress .pb to .pb.gz for download
+    const zlib = require("zlib");
+    const autolinPbGz = autolinPb + ".gz";
+    if (fs.existsSync(autolinPb)) {
+      fs.writeFileSync(autolinPbGz, zlib.gzipSync(fs.readFileSync(autolinPb)));
+    }
+
+    // Store output files for the reload and export endpoints
+    pipelineOutputFile = jsonlOutput;
+    pipelineInputPb = actualInput;
+
+    // Build list of available downloads
+    const downloads = [];
+    if (fs.existsSync(jsonlOutput)) downloads.push({ name: `${basename}.autolin.jsonl.gz`, path: jsonlOutput });
+    if (fs.existsSync(autolinPbGz)) downloads.push({ name: `${basename}.autolin.pb.gz`, path: autolinPbGz });
+    if (fs.existsSync(tsvOutput)) downloads.push({ name: `${basename}.autolin.tsv`, path: tsvOutput });
+
+    sendEvent("complete", {
       outputFile: jsonlOutput,
+      downloads: downloads,
       message: "Pipeline completed successfully"
     });
 
@@ -323,6 +394,19 @@ app.post("/run-autolin", async function (req, res) {
     sendEvent("error", { message: error.message });
     res.end();
   }
+});
+
+// Download a pipeline output file
+app.get("/download", function (req, res) {
+  const filePath = req.query.path;
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+  // Only allow downloading from the temp upload directory
+  if (!filePath.startsWith(os.tmpdir())) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+  res.download(filePath);
 });
 
 // Reload data from a new file (called after pipeline completes)
@@ -394,6 +478,7 @@ app.post("/reload-data", async function (req, res) {
         processedData.mutations
       );
 
+      snapshotLineages();
       console.log("Data reloaded successfully");
       return { success: true, nodes: processedData.nodes.length };
     } finally {
@@ -1232,38 +1317,19 @@ app.get("/export/metadata", function (req, res) {
     res.setHeader('Content-Type', 'text/tab-separated-values');
     res.setHeader('Content-Disposition', 'attachment; filename="exported_metadata.tsv"');
 
-    // Create header row - just node_id and lineage
-    res.write('node_id\tlineage\n');
+    res.write('sample\tlineage\tmodified\n');
 
-    // Write data rows with just node_id and lineage
     processedData.nodes.forEach(node => {
-      const nodeId = node.node_id || '';
-      // Look for lineage in various possible metadata fields
-      let lineage = '';
-      
-      // Check common lineage field names
-      if (node.meta_lineage) {
-        lineage = node.meta_lineage;
-      } else if (node.meta_pango_lineage) {
-        lineage = node.meta_pango_lineage;
-      } else if (node.meta_Nextclade_pango) {
-        lineage = node.meta_Nextclade_pango;
-      } else if (node.meta_pangolin_lineage) {
-        lineage = node.meta_pangolin_lineage;
-      } else if (node.lineage) {
-        lineage = node.lineage;
-      } else {
-        // If no lineage found, use empty string
-        lineage = '';
-      }
+      if (!node.is_tip) return;
 
-      // Handle values that might contain tabs or newlines
-      const lineageStr = String(lineage);
-      const cleanLineage = lineageStr.includes('\t') || lineageStr.includes('\n') || lineageStr.includes('\r') 
-        ? `"${lineageStr.replace(/"/g, '""')}"` 
-        : lineageStr;
+      const name = node.name || node.node_id || '';
+      const lineage = node.meta_annotation_1 || node.meta_lineage ||
+        node.meta_pango_lineage || node.meta_Nextclade_pango ||
+        node.meta_pangolin_lineage || node.lineage || '';
+      const orig = originalLineages.get(node.node_id) || '';
+      const modified = lineage !== orig ? 1 : 0;
 
-      res.write(`${nodeId}\t${cleanLineage}\n`);
+      res.write(`${name}\t${lineage}\t${modified}\n`);
     });
 
     res.end();
@@ -1272,6 +1338,63 @@ app.get("/export/metadata", function (req, res) {
   } catch (error) {
     console.error('Error exporting TSV:', error);
     res.status(500).send({ error: 'Failed to export TSV' });
+  }
+});
+
+// Export annotated protobuf reflecting current lineage edits
+app.get("/export/pb", async function (req, res) {
+  console.log("/export/pb - exporting annotated protobuf");
+
+  if (!pipelineInputPb || !fs.existsSync(pipelineInputPb)) {
+    return res.status(400).json({ error: "No pipeline protobuf available" });
+  }
+
+  try {
+    const zlib = require("zlib");
+    const outputDir = path.dirname(pipelineInputPb);
+    const cladeFile = path.join(outputDir, "export_clades.tsv");
+    const exportPb = path.join(outputDir, "export_annotated.pb");
+
+    // Build clade annotation file from current in-memory lineage assignments
+    // Format: lineage\tnode_id (for matUtils annotate -c)
+    const lines = [];
+    processedData.nodes.forEach(node => {
+      let lineage = node.meta_annotation_1 || node.meta_lineage || node.meta_pango_lineage ||
+        node.meta_Nextclade_pango || node.meta_pangolin_lineage || node.lineage || '';
+      if (lineage && !node.is_tip) {
+        lines.push(`${lineage}\t${node.name || node.node_id}`);
+      }
+    });
+    fs.writeFileSync(cladeFile, lines.join("\n") + "\n");
+
+    // Run matUtils annotate to apply current assignments to original pb
+    await new Promise((resolve, reject) => {
+      const matUtilsCmd = matUtilsPath;
+      const proc = spawn(matUtilsCmd, [
+        "annotate", "-i", pipelineInputPb, "-l", "-c", cladeFile, "-o", exportPb
+      ], { cwd: "/", env: { ...process.env } });
+
+      proc.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`matUtils annotate exited with code ${code}`));
+      });
+      proc.on("error", (err) => reject(err));
+    });
+
+    // Gzip and send
+    const pbData = fs.readFileSync(exportPb);
+    const gzipped = zlib.gzipSync(pbData);
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', 'attachment; filename="exported_tree.pb.gz"');
+    res.send(gzipped);
+
+    // Cleanup temp files
+    try { fs.unlinkSync(cladeFile); fs.unlinkSync(exportPb); } catch(e) {}
+
+  } catch (error) {
+    console.error('Error exporting pb:', error);
+    res.status(500).json({ error: 'Failed to export protobuf: ' + error.message });
   }
 });
 
@@ -1361,6 +1484,7 @@ const loadData = async () => {
   );
 
   cached_starting_values = result;
+  snapshotLineages();
   console.log("Saved cached starting vals");
   // set a timeout to start listening
 
