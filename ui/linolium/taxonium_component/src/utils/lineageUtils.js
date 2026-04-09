@@ -131,6 +131,12 @@ export const parseLineageName = (lineageName, allLineages = null) => {
  * @returns {string} The normalized lineage name
  */
 const normalizeLineageForColoring = (name) => {
+  // Strip "auto." prefix so auto.lineage4.8.13 → lineage4.8.13
+  // This places auto-proposed lineages as children of their parent lineage
+  // in the color hierarchy tree
+  if (name.startsWith('auto.')) {
+    return name.slice(5);
+  }
   return name;
 };
 
@@ -430,213 +436,118 @@ export const clearHierarchicalColorCache = () => {
  * @returns {Array} RGB color array [r, g, b]
  */
 export const generatePangoLineageColor = (lineageName, allLineageData = null) => {
-  // Use global window variable if no data is passed (for caching scenario)
   if (!allLineageData && typeof window !== 'undefined' && (window).__taxoniumLineageData) {
     allLineageData = (window).__taxoniumLineageData;
   }
-  
-  // Check cache first
+
   if (__hierarchicalColorCache[lineageName]) {
     return __hierarchicalColorCache[lineageName];
   }
   if (!lineageName || typeof lineageName !== 'string') return [180, 180, 180];
 
+  // Curated categorical palette — 10 distinct, colorblind-friendly colors
+  // Inspired by Tableau 10 / d3-category10, tuned for dark-on-light tree backgrounds
+  const palette = [
+    [31, 119, 180],   // blue
+    [255, 127, 14],   // orange
+    [44, 160, 44],    // green
+    [214, 39, 40],    // red
+    [148, 103, 189],  // purple
+    [140, 86, 75],    // brown
+    [227, 119, 194],  // pink
+    [23, 190, 207],   // cyan
+    [188, 189, 34],   // olive
+    [127, 127, 127],  // gray
+  ];
 
+  // Lighter tints for cycling when > 10 siblings
+  const tint = (rgb, amount) => rgb.map(c => Math.min(255, Math.round(c + (255 - c) * amount)));
+  const shade = (rgb, amount) => rgb.map(c => Math.round(c * (1 - amount)));
 
-  // 12 distinct base hues evenly distributed around the color wheel
-  const baseHues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
-
-  // HSL to RGB conversion helper
-  const hslToRgb = (h, s, l) => {
-    h = h / 360;
-    s = s / 100;
-    l = l / 100;
-    
-    let r, g, b;
-    
-    if (s === 0) {
-      r = g = b = l;
-    } else {
-      const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1/6) return p + (q - p) * 6 * t;
-        if (t < 1/2) return q;
-        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-        return p;
-      };
-      
-      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      const p = 2 * l - q;
-      
-      r = hue2rgb(p, q, h + 1/3);
-      g = hue2rgb(p, q, h);
-      b = hue2rgb(p, q, h - 1/3);
-    }
-    
-    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-  };
-
-  // Simple hash function for deterministic color assignment when no data available
   const simpleHash = (str) => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
       hash = hash & hash;
     }
     return Math.abs(hash);
   };
 
-  // If no lineage data provided, use simple hash-based coloring
-  if (!allLineageData || !Array.isArray(allLineageData)) {
-    const hash = simpleHash(lineageName);
-    const hue = baseHues[hash % baseHues.length];
-    const result = hslToRgb(hue, 70, 50);
+  const isAuto = lineageName.startsWith('auto.');
+
+  // Non-auto lineages → muted neutral (these are the unassigned parent bucket)
+  if (!isAuto) {
+    const result = [185, 185, 178];
     __hierarchicalColorCache[lineageName] = result;
     return result;
   }
 
-  // Extract all unique lineages from the data
-  const allLineages = [...new Set(allLineageData.map(item => item.value || item))];
-  
-  // Normalize the lineage name for hierarchical coloring
-  const normalizedLineageName = normalizeLineageForColoring(lineageName);
-  
-  // Build a hierarchical tree structure to understand sibling relationships using normalized names
-  const buildLineageTree = () => {
-    const tree = {};
-    
-    // Add each lineage to the tree, normalizing names to create unified hierarchy
-    for (const lineage of allLineages) {
-      const normalizedLineage = normalizeLineageForColoring(lineage);
-      const parts = normalizedLineage.split('.');
-      let current = tree;
-      
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        if (!current[part]) {
-          current[part] = { 
-            children: {},
-            fullName: parts.slice(0, i + 1).join('.'),
-            isLeaf: false
-          };
+  // For auto lineages: find the parent lineage and terminal segments
+  const stripped = lineageName.slice(5); // remove "auto."
+  const parts = stripped.split('.');
+  let parentDepth = parts.length - 1; // default: everything but last segment
+
+  if (allLineageData && Array.isArray(allLineageData)) {
+    const nonAutoNames = new Set(
+      allLineageData.map(item => (item.value || item))
+        .filter(n => typeof n === 'string' && !n.startsWith('auto.'))
+    );
+    let best = 0;
+    for (let i = 1; i <= parts.length; i++) {
+      if (nonAutoNames.has(parts.slice(0, i).join('.'))) best = i;
+    }
+    if (best > 0) parentDepth = best;
+  }
+
+  const parentPrefix = parts.slice(0, parentDepth).join('.');
+
+  // Find direct auto children of this parent (the main sibling set)
+  // e.g., for parent "lineage4.8", find auto.lineage4.8.X (one segment past parent)
+  let directSiblings = [];
+  if (allLineageData && Array.isArray(allLineageData)) {
+    const prefix = 'auto.' + parentPrefix + '.';
+    const seen = new Set();
+    for (const item of allLineageData) {
+      const name = item.value || item;
+      if (typeof name === 'string' && name.startsWith(prefix)) {
+        // Extract just the first segment past the parent
+        const rest = name.slice(prefix.length);
+        const firstSeg = rest.split('.')[0];
+        if (firstSeg && !seen.has(firstSeg)) {
+          seen.add(firstSeg);
+          directSiblings.push(firstSeg);
         }
-        current = current[part].children;
-      }
-      
-      // Mark the final node as a leaf
-      const leafPath = parts.slice(0, -1);
-      let leafParent = tree;
-      for (const part of leafPath) {
-        leafParent = leafParent[part].children;
-      }
-      if (leafParent[parts[parts.length - 1]]) {
-        leafParent[parts[parts.length - 1]].isLeaf = true;
       }
     }
-    
-    return tree;
-  };
-
-  const lineageTree = buildLineageTree();
-  
-  // Function to find all siblings at each level for a given lineage path
-  const getSiblingGroupsAlongPath = (targetLineageName) => {
-    const parts = targetLineageName.split('.');
-    const siblingGroups = [];
-    
-    let current = lineageTree;
-    let currentPath = [];
-    
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      currentPath.push(part);
-      
-      // Get all siblings at this level (including self)
-      const siblings = Object.keys(current).sort();
-      
-      if (siblings.length > 1) {
-        // Only record this as a significant split if there are multiple siblings
-        siblingGroups.push({
-          level: i,
-          siblings: siblings,
-          selfIndex: siblings.indexOf(part),
-          path: currentPath.join('.')
-        });
-      }
-      
-      // Move to the next level
-      if (current[part] && current[part].children) {
-        current = current[part].children;
-      } else {
-        break;
-      }
-    }
-    
-    return siblingGroups;
-  };
-
-  const siblingGroups = getSiblingGroupsAlongPath(normalizedLineageName);
-  
-  // Implement proper hierarchical hue splitting
-  // Start with full hue range available
-  let availableHues = [...baseHues];  // Copy of all 12 hues
-  let assignedHue = null;
-  let currentHueRange = availableHues;
-  let huesExhausted = false;
-  
-  // Walk through each level and split hues among siblings
-  for (let i = 0; i < siblingGroups.length && !huesExhausted; i++) {
-    const group = siblingGroups[i];
-    const numSiblings = group.siblings.length;
-    
-    if (currentHueRange.length >= numSiblings) {
-      // We have enough hues to assign distinct ones to each sibling
-      const hueIndex = group.selfIndex;
-      assignedHue = currentHueRange[hueIndex % currentHueRange.length];
-      
-      // For next level, this lineage gets a subset of hues
-      // Divide the hue range among siblings
-      const huesPerSibling = Math.max(1, Math.floor(currentHueRange.length / numSiblings));
-      const startIdx = hueIndex * huesPerSibling;
-      const endIdx = Math.min(currentHueRange.length, startIdx + huesPerSibling);
-      currentHueRange = currentHueRange.slice(startIdx, endIdx);
-      
-      if (currentHueRange.length === 0) {
-        huesExhausted = true;
-      }
-    } else {
-      // Not enough hues - reuse cyclically and mark as exhausted
-      assignedHue = currentHueRange[group.selfIndex % currentHueRange.length];
-      huesExhausted = true;
-      break;
-    }
+    directSiblings.sort((a, b) => {
+      const na = parseInt(a), nb = parseInt(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
   }
-  
-  // If no hue assigned yet (no sibling groups), assign based on root
-  if (assignedHue === null) {
-    const rootPart = lineageName.split('.')[0];
-    const hash = simpleHash(rootPart);
-    assignedHue = baseHues[hash % baseHues.length];
+
+  // Determine which direct sibling this lineage belongs to
+  const terminalSegments = parts.slice(parentDepth);
+  const directChild = terminalSegments[0] || '0';
+  const siblingIndex = directSiblings.indexOf(directChild);
+  const idx = siblingIndex >= 0 ? siblingIndex : simpleHash(directChild) % palette.length;
+
+  // Pick base color from palette, cycling with tint/shade shifts if > 10
+  const cycle = Math.floor(idx / palette.length);
+  let baseColor = palette[idx % palette.length];
+  if (cycle === 1) baseColor = tint(baseColor, 0.35);
+  else if (cycle === 2) baseColor = shade(baseColor, 0.25);
+  else if (cycle > 2) baseColor = tint(baseColor, 0.15 * cycle);
+
+  // Sub-lineages (e.g., auto.lineage4.8.4.1) → lighter tint of their parent auto color
+  const subDepth = terminalSegments.length - 1; // 0 for direct children
+  let result;
+  if (subDepth === 0) {
+    result = baseColor;
+  } else {
+    result = tint(baseColor, Math.min(0.5, subDepth * 0.2));
   }
-  
-  // Calculate depth for shading - use total depth if hues exhausted
-  const parts = lineageName.split('.');
-  const totalDepth = parts.length - 1; // 0 for root, 1 for first level, etc.
-  
-  // If hues are exhausted, increase shading variation by depth
-  const depthFactor = huesExhausted ? totalDepth : Math.max(0, totalDepth - siblingGroups.length);
-  
-  // Adjust saturation and lightness based on depth
-  // Deeper levels get more muted colors, but keep them distinguishable
-  const baseSaturation = 75;
-  const baseLightness = 50;
-  
-  const saturation = Math.max(30, baseSaturation - depthFactor * 10);
-  const lightness = Math.max(25, baseLightness - depthFactor * 5);
-  
-  const result = hslToRgb(assignedHue, saturation, lightness);
+
   __hierarchicalColorCache[lineageName] = result;
-  return result
+  return result;
 }; 
