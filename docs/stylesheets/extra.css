@@ -1,5 +1,28 @@
-/* Center title image on the home page */
-.md-typeset img[alt="Linolium"] {
+/* Light shade for the header */
+.md-header {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+.md-header__title {
+  color: #1e293b;
+}
+.md-search__input {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.md-search__input::placeholder {
+  color: #64748b;
+}
+
+/* Title image on home page: H1 wrapping an image shouldn't get heading chrome */
+.md-typeset h1:has(img.title-img) {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+  line-height: 1;
+}
+.md-typeset img.title-img {
+  max-width: 220px;
+  height: auto;
   display: block;
-  margin: 0 auto;
 }

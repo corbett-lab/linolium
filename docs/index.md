@@ -1,4 +1,4 @@
-![Linolium](assets/title.png){ width=280 }
+# ![Linolium](assets/title.png){ .title-img }
 
 Automated phylogenetic lineage proposal and interactive curation.
 
