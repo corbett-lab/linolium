@@ -4,7 +4,7 @@
 
 ### 1. Upload a tree
 
-From the launcher screen, upload a UShER MAT protobuf file (`.pb` or `.pb.gz`). The file is sent to the backend server for processing.
+From the launcher screen, upload a UShER MAT protobuf file (`.pb` or `.pb.gz`). Files stay local — the pipeline runs entirely inside your Docker container.
 
 ### 2. Configure parameters
 
@@ -48,11 +48,7 @@ Each lineage entry shows:
 
 Click a lineage to highlight it in the tree. Hover to preview.
 
-#### Auto vs. original lineages
-
-Lineages that AutoLin proposes are prefixed with `auto.` (e.g., `auto.lineage4.8.13`) and are colored with distinct, vibrant hues drawn from a categorical palette. Sub-lineages of an auto lineage (e.g., `auto.lineage4.8.4.1`) share the parent's hue but are rendered as a lighter tint.
-
-Samples that retain their **original** annotations (any non-`auto.` label, such as `lineage4.8` itself) are shown in a muted neutral gray — they represent the "unassigned" parent bucket that auto lineages subdivide. This makes it easy to distinguish newly proposed lineages from samples that AutoLin left untouched.
+AutoLin proposes new lineages prefixed with `auto.`, each colored distinctly (sub-lineages use lighter tints of the parent's color). Samples keeping their original (non-`auto.`) labels stay a neutral gray.
 
 ### Editing lineages
 
