@@ -82,3 +82,9 @@ button[data-testid="addTrackNextButton"] {
 .MuiDialog-container > div > div > .MuiScopedCssBaseline-root {
   padding: 15px;
 }
+
+/* Edit-mode crosshair cursor — overrides deck.gl's default grab cursor */
+.edit-mode,
+.edit-mode * {
+  cursor: crosshair !important;
+}
