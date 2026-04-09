@@ -1,0 +1,12 @@
+site_name: Linolium
+site_description: Automated phylogenetic lineage proposal and interactive curation
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: teal
+  features:
+    - navigation.sections
+nav:
+  - Home: index.md
+  - Usage Guide: usage.md
