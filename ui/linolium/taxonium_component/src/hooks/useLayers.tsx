@@ -514,20 +514,32 @@ const useLayers = ({
 
 
     // Ring layer highlighting the clade roots of a set of lineages (e.g. when
-    // hovering the descendant-count badge in the sidebar)
+    // hovering the descendant-count badge in the sidebar). Search both viewport
+    // (detailed) and full-tree (base) data so descendants outside the viewport
+    // are still highlighted.
     const highlightedRootSet = new Set(highlightedRoots || []);
-    const highlight_root_data = (highlightedRoots && highlightedRoots.length > 0)
-      ? detailed_data.nodes.filter(
-          (n: Node) =>
+    const highlight_root_data: Node[] = [];
+    if (highlightedRoots && highlightedRoots.length > 0) {
+      const seen = new Set<string | number>();
+      const sources = [detailed_data.nodes, base_data.nodes || []];
+      for (const source of sources) {
+        for (const n of source) {
+          if (
             n.clades &&
             n.clades[clade_accessor] &&
-            highlightedRootSet.has(n.clades[clade_accessor])
-        )
-      : [];
+            highlightedRootSet.has(n.clades[clade_accessor]) &&
+            !seen.has(n.node_id)
+          ) {
+            seen.add(n.node_id);
+            highlight_root_data.push(n);
+          }
+        }
+      }
+    }
 
     const highlight_root_layer = {
       layerType: "ScatterplotLayer",
-      id: "highlighted-lineage-roots",
+      id: "main-highlighted-lineage-roots",
       data: highlight_root_data,
       getPosition: (d: Node) => [getX(d), d.y],
       getRadius: 9,
