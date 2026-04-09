@@ -773,7 +773,7 @@ const LineageTools = React.memo<LineageToolsProps>(({
             <div className="flex items-center text-xs space-x-1">
               {/* Descendant lineages count */}
               <div
-                className="flex items-center bg-blue-50 px-1.5 py-0.5 rounded text-blue-700 border border-blue-200 cursor-help"
+                className="flex items-center bg-blue-50 px-1.5 py-0.5 rounded text-blue-700 border border-blue-200"
                 title="Descendant lineages (hover to highlight in tree)"
                 onMouseEnter={() => {
                   if (!setHighlightedRoots) return;
