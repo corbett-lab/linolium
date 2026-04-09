@@ -398,6 +398,7 @@ function Taxonium({
     id: number;
     action: string;
     lineageName: string;
+    parentLineage?: string;
     description: string;
     timestamp: string;
     affectedLineages?: string[];

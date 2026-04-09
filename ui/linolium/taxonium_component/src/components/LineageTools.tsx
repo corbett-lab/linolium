@@ -56,6 +56,7 @@ type EditHistoryEntry = {
   id: number;
   action: string;
   lineageName: string;
+  parentLineage?: string;
   description: string;
   timestamp: string;
   affectedLineages?: string[];
@@ -161,6 +162,12 @@ const EditHistoryPanel = ({ editHistory, onUndo, backendUrl }: {
                 style={{ textDecoration: highlighted ? 'line-through' : 'none' }}
               >
                 {entry.lineageName}
+                {entry.action === 'merge' && entry.parentLineage && (
+                  <>
+                    <span style={{ margin: '0 4px', color: highlighted ? '#dc2626' : '#9ca3af' }}>→</span>
+                    {entry.parentLineage}
+                  </>
+                )}
               </span>
               {onUndo && (
                 <button
