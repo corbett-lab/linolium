@@ -69,6 +69,8 @@ interface UseLayersProps {
     info: Record<"aa" | "nt", Record<string, string>>,
   ) => void;
   hoveredKey: string | null;
+  setHoveredKey?: (key: string | null) => void;
+  onLineageLabelClick?: (lineage: string) => void;
   view: any;
 }
 
@@ -91,6 +93,8 @@ const useLayers = ({
   treenomeReferenceInfo,
   setTreenomeReferenceInfo,
   hoveredKey,
+  setHoveredKey,
+  onLineageLabelClick,
   view,
 }: UseLayersProps) => {
   const lineColor = settings.lineColor;
@@ -515,7 +519,11 @@ const useLayers = ({
       getPosition: (d: Node) => [getX(d), d.y],
       getText: (d: Node) => d.clades[clade_accessor],
 
-      getColor: settings.cladeLabelColor,
+      getColor: (d: Node) => {
+        const name = d.clades[clade_accessor];
+        if (hoveredKey && name === hoveredKey) return [37, 99, 235]; // blue-600
+        return settings.cladeLabelColor;
+      },
       getAngle: 0,
       fontFamily: "Roboto, sans-serif",
       fontWeight: 700,
@@ -523,10 +531,31 @@ const useLayers = ({
       billboard: true,
       getTextAnchor: "end",
       getAlignmentBaseline: "center",
-      getSize: 11,
+      getSize: (d: Node) => {
+        const name = d.clades[clade_accessor];
+        return hoveredKey && name === hoveredKey ? 14 : 11;
+      },
+      pickable: true,
+      onHover: (info: any) => {
+        if (!setHoveredKey) return;
+        if (info && info.object) {
+          setHoveredKey(info.object.clades[clade_accessor]);
+        } else {
+          setHoveredKey(null);
+        }
+      },
+      onClick: (info: any) => {
+        if (info && info.object && onLineageLabelClick) {
+          onLineageLabelClick(info.object.clades[clade_accessor]);
+          return true; // stop propagation to underlying node-click handler
+        }
+        return false;
+      },
       modelMatrix: modelMatrix,
       updateTriggers: {
         getPosition: [getX],
+        getColor: [hoveredKey, settings.cladeLabelColor],
+        getSize: [hoveredKey],
       },
     };
 

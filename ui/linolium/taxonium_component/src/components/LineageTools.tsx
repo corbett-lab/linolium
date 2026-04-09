@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "./Basic";
 import { FaCheck, FaChevronRight, FaChevronDown, FaFilter, FaArrowUp, FaEdit, FaSitemap, FaLeaf, FaSearch } from "react-icons/fa";
 import { SearchMethod } from "../types/search";
@@ -250,10 +250,35 @@ const LineageTools = React.memo<LineageToolsProps>(({
   onUndo
 }) => {
   const [hierarchyData, setHierarchyData] = useState<any[]>([]);
-  const [expandedItems, setExpandedItems] = useState({});
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const useHierarchicalColors = false; // Default to simple hash-based colors
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the selected lineage into view when it changes
+  useEffect(() => {
+    if (!selectedCategory || !listContainerRef.current) return;
+    // Expand ancestors so the item is rendered before we scroll
+    const parts = selectedCategory.split('.');
+    const ancestors: Record<string, boolean> = {};
+    for (let i = 1; i < parts.length; i++) {
+      ancestors[parts.slice(0, i).join('.')] = true;
+    }
+    if (Object.keys(ancestors).length > 0) {
+      setExpandedItems((prev) => ({ ...prev, ...ancestors }));
+    }
+    // Defer scroll to next frame so any newly expanded items are in the DOM
+    const raf = requestAnimationFrame(() => {
+      const el = listContainerRef.current?.querySelector<HTMLElement>(
+        `[data-lineage-name="${CSS.escape(selectedCategory)}"]`
+      );
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedCategory]);
 
   // Process data with debouncing to prevent rapid updates
   useEffect(() => {
@@ -658,6 +683,7 @@ const LineageTools = React.memo<LineageToolsProps>(({
       return (
         <React.Fragment key={node.name}>
           <li
+            data-lineage-name={node.name}
             className={`text-sm cursor-pointer py-1 px-1 flex justify-between rounded ${
               relationship === 'self' ? "bg-blue-100 font-medium" :
               relationship === 'parent' ? "bg-blue-50" :
@@ -930,7 +956,7 @@ const LineageTools = React.memo<LineageToolsProps>(({
           )}
 
           {/* Lineage list - Always hierarchical */}
-          <div className="flex-grow overflow-y-auto">
+          <div className="flex-grow overflow-y-auto" ref={listContainerRef}>
             {isLoading ? (
               <div className="text-center py-4 text-gray-500">
                 Loading lineage data...

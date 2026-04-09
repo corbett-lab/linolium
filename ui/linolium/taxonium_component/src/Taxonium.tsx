@@ -570,6 +570,7 @@ function Taxonium({
               lineageSidebarOpen={lineageSidebarOpen}
               hoveredKey={hoveredKey}
               setHoveredKey={setHoveredKey}
+              onLineageLabelClick={handleLineageSelect}
             />
           </div>
 

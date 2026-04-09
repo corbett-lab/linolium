@@ -66,6 +66,7 @@ export interface DeckProps {
   lineageSidebarOpen?: boolean;
   hoveredKey?: string | null;
   setHoveredKey?: (key: string | null) => void;
+  onLineageLabelClick?: (lineage: string) => void;
 }
 
 function Deck({
@@ -94,6 +95,7 @@ function Deck({
   lineageSidebarOpen = false,
   hoveredKey: externalHoveredKey,
   setHoveredKey: externalSetHoveredKey,
+  onLineageLabelClick,
 }: DeckProps) {
 
   const zoomReset = view.zoomReset;
@@ -258,6 +260,8 @@ function Deck({
     treenomeReferenceInfo,
     setTreenomeReferenceInfo,
     hoveredKey,
+    setHoveredKey,
+    onLineageLabelClick,
     view,
   });
 
