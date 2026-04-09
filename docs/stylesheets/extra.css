@@ -1,16 +1,18 @@
-/* Very light blue header */
+/* White header with subtle border */
 .md-header {
-  background-color: #eff6ff;
-  color: #1e3a8a;
+  background-color: #ffffff;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: none;
 }
 .md-header__title {
-  color: #1e3a8a;
+  color: #1e293b;
 }
 .md-search__input {
-  background-color: rgba(30, 58, 138, 0.08);
+  background-color: rgba(0, 0, 0, 0.04);
 }
 .md-search__input::placeholder {
-  color: #475569;
+  color: #64748b;
 }
 
 /* Title image on home page: H1 wrapping an image shouldn't get heading chrome */
