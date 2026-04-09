@@ -1,16 +1,16 @@
-/* Light shade for the header */
+/* Very light blue header */
 .md-header {
-  background-color: #f1f5f9;
-  color: #1e293b;
+  background-color: #eff6ff;
+  color: #1e3a8a;
 }
 .md-header__title {
-  color: #1e293b;
+  color: #1e3a8a;
 }
 .md-search__input {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(30, 58, 138, 0.08);
 }
 .md-search__input::placeholder {
-  color: #64748b;
+  color: #475569;
 }
 
 /* Title image on home page: H1 wrapping an image shouldn't get heading chrome */
@@ -22,7 +22,7 @@
   line-height: 1;
 }
 .md-typeset img.title-img {
-  max-width: 220px;
+  max-width: 55px;
   height: auto;
   display: block;
 }
