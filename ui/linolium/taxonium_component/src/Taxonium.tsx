@@ -181,6 +181,8 @@ function Taxonium({
 
       setSelectedLineage(null);
       refreshLineageData();
+      refreshTreeData();
+      fetchEditHistory();
 
       toast.success(`Merged "${lineageName}" into "${result.parentLineage}" (${result.mergedCount} nodes)`, {
         duration: 4000,
@@ -249,8 +251,10 @@ function Taxonium({
         // Clear any existing lineage selection since the lineage has changed
         setSelectedLineage(null);
 
-        // Refresh the lineage data to reflect the changes
+        // Refresh the lineage data and tree view to reflect the changes
         refreshLineageData();
+        refreshTreeData();
+        fetchEditHistory();
 
         console.log(`SUCCESS: ${result.message}`);
         console.log(`Assigned to ${result.assignedCount} nodes, cleared from ${result.clearedCount} nodes under root ${nodeIdStr}`);
@@ -345,7 +349,7 @@ function Taxonium({
     [updateQuery]
   );
 
-  const { data, boundsForQueries, isCurrentlyOutsideBounds } =
+  const { data, boundsForQueries, isCurrentlyOutsideBounds, refreshTreeData } =
     useGetDynamicData(
       backend,
       colorBy,
@@ -388,6 +392,50 @@ function Taxonium({
 
   // Get full lineage data for LineageTools (not subsampled keyStuff)
   const { lineageData: fullLineageData, isLoading, error, refreshData: refreshLineageData } = useFullLineageData(backend, 'meta_annotation_1');
+
+  // Edit history state
+  const [editHistory, setEditHistory] = useState<Array<{
+    id: number;
+    action: string;
+    lineageName: string;
+    description: string;
+    timestamp: string;
+    affectedLineages?: string[];
+  }>>([]);
+
+  const fetchEditHistory = useCallback(async () => {
+    if (backend?.type !== 'server' || !backend.backend_url) return;
+    try {
+      const response = await fetch(`${backend.backend_url}/edit-history`);
+      if (response.ok) {
+        setEditHistory(await response.json());
+      }
+    } catch (e) { /* non-critical */ }
+  }, [backend]);
+
+  const handleUndo = useCallback(async (editId?: number) => {
+    if (backend?.type !== 'server' || !backend.backend_url) return;
+    try {
+      const response = await fetch(`${backend.backend_url}/undo-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editId }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Undo failed');
+      }
+      const result = await response.json();
+      refreshLineageData();
+      refreshTreeData();
+      fetchEditHistory();
+      toast.success(`Undid: ${result.undone}`, { duration: 3000, position: 'top-center' });
+    } catch (error) {
+      toast.error(`Undo failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        duration: 4000, position: 'top-center',
+      });
+    }
+  }, [backend, refreshLineageData, refreshTreeData, fetchEditHistory]);
 
   // Initialize colorHook with lineage data for hierarchical coloring
   const colorHook = useColor(config, colorMapping, colorBy.colorByField, fullLineageData);
@@ -459,6 +507,8 @@ function Taxonium({
           deckSize={deckSize}
           boundsForQueries={boundsForQueries}
           pipelineDownloads={pipelineDownloads}
+          editHistory={editHistory}
+          onUndo={handleUndo}
         />
 
         <div className="flex flex-col md:flex-row overflow-hidden flex-grow">
