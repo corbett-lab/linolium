@@ -17,7 +17,7 @@ Before running the pipeline, adjust the AutoLin parameters:
 | **Recursive** | Whether to recursively subdivide proposed lineages | On |
 | **Verbose** | Print detailed progress during the run | Off |
 
-**Advanced options** (click to expand):
+Additional parameters are available under **Advanced Options**:
 
 - **Uniformity** — threshold for how uniformly a clade must be annotated (0-1)
 - **Foldover** — controls how aggressively to split ambiguous clades
@@ -42,12 +42,17 @@ Once the viewer loads, the **Lineage Explorer** sidebar (left panel) shows all p
 
 Each lineage entry shows:
 
-- A **color swatch** matching the tree visualization
 - The **lineage name** (e.g., `auto.lineage4.8.13`)
 - **Sub-lineage count** — number of child lineages
 - **Sample count** — number of tips assigned to this lineage
 
 Click a lineage to highlight it in the tree. Hover to preview.
+
+#### Auto vs. original lineages
+
+Lineages that AutoLin proposes are prefixed with `auto.` (e.g., `auto.lineage4.8.13`) and are colored with distinct, vibrant hues drawn from a categorical palette. Sub-lineages of an auto lineage (e.g., `auto.lineage4.8.4.1`) share the parent's hue but are rendered as a lighter tint.
+
+Samples that retain their **original** annotations (any non-`auto.` label, such as `lineage4.8` itself) are shown in a muted neutral gray — they represent the "unassigned" parent bucket that auto lineages subdivide. This makes it easy to distinguish newly proposed lineages from samples that AutoLin left untouched.
 
 ### Editing lineages
 
