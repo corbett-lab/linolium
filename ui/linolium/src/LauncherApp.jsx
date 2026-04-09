@@ -926,6 +926,8 @@ function LauncherApp({ onLaunchTaxonium, onDownloadsReady }) {
 
         {/* Download Results */}
         {downloads.length > 0 && stage === STAGES.COMPLETE && (
+          <>
+          <div className="section-title">Download Autolin results</div>
           <div className="downloads-row">
             {downloads.map((dl, i) => (
               <a
@@ -938,6 +940,7 @@ function LauncherApp({ onLaunchTaxonium, onDownloadsReady }) {
               </a>
             ))}
           </div>
+          </>
         )}
 
         {/* Logs */}

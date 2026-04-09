@@ -11,7 +11,7 @@ This tool provides an interactive environment for lineage discovery and curation
 #### Quick Start
 
 ```bash
-docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 ghcr.io/corbett-lab/lineage-curation
+docker run -it --memory=8g -v "$PWD":/data -p 3000:3000 -p 8001:8001 ghcr.io/corbett-lab/lineage-curation
 ```
 
 Then open http://localhost:3000, upload a .pb (or .pb.gz) file, configure parameters, and run the pipeline. Results can be downloaded as .jsonl.gz, .pb.gz, or .tsv from the UI.
@@ -20,7 +20,7 @@ Or build locally:
 
 ```bash
 docker build -t lineage-curation .
-docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
+docker run -it --memory=8g -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation
 ```
 
 Open http://localhost:3000, upload a `.pb` (or `.pb.gz`) file, configure parameters, and run the pipeline. Results can be downloaded as `.jsonl.gz`, `.pb.gz`, or `.tsv` from the UI.
@@ -30,7 +30,7 @@ Open http://localhost:3000, upload a `.pb` (or `.pb.gz`) file, configure paramet
 To run the individual steps manually inside the container:
 
 ```bash
-docker run -it -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation bash
+docker run -it --memory=8g -v "$PWD":/data -p 3000:3000 -p 8001:8001 lineage-curation bash
 ```
 
 ```bash

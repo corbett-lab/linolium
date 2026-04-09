@@ -1,7 +1,7 @@
 #!/bin/bash
 # Dev mode: mounts source into container, builds component, runs vite dev server.
 # Much faster than full docker build — only rebuilds the JS component.
-docker run -it --rm \
+docker run -it --rm --memory=8g \
   -v "$PWD/ui/linolium/src":/app/ui/src \
   -v "$PWD/ui/linolium/taxonium_component/src":/app/ui/taxonium_component/src \
   -v "$PWD/ui/linolium/taxonium_backend":/app/ui/taxonium_backend \
