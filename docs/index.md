@@ -1,5 +1,9 @@
 # Linolium
 
+<p align="center">
+  <img src="assets/logo.png" alt="Linolium" width="120">
+</p>
+
 Automated phylogenetic lineage proposal and interactive curation.
 
 Linolium provides an environment for lineage discovery and curation on pathogen phylogenetic trees of virtually any size. It builds on the AutoLin algorithm for distance-based identification of clades and provides a UI for customizing the algorithm and curating results.

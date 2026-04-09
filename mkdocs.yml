@@ -1,12 +1,30 @@
 site_name: Linolium
 site_description: Automated phylogenetic lineage proposal and interactive curation
+
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
   palette:
-    scheme: default
-    primary: teal
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
   features:
     - navigation.sections
+    - navigation.top
+    - content.code.copy
+
 nav:
   - Home: index.md
   - Usage Guide: usage.md
