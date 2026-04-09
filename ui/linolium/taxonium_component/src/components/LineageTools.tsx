@@ -48,7 +48,150 @@ interface LineageToolsProps {
   deckSize?: { width: number; height: number } | null;
   boundsForQueries?: any;
   pipelineDownloads?: { name: string; path: string }[];
+  editHistory?: EditHistoryEntry[];
+  onUndo?: (editId?: number) => void;
 }
+
+type EditHistoryEntry = {
+  id: number;
+  action: string;
+  lineageName: string;
+  description: string;
+  timestamp: string;
+  affectedLineages?: string[];
+};
+
+const EditHistoryPanel = ({ editHistory, onUndo, backendUrl }: {
+  editHistory: EditHistoryEntry[];
+  onUndo?: (editId?: number) => void;
+  backendUrl?: string;
+}) => {
+  const [hoveredUndoId, setHoveredUndoId] = useState<number | null>(null);
+  const [conflictSet, setConflictSet] = useState<Set<number>>(new Set());
+
+  // Fetch conflict preview from backend when hovering an undo button
+  useEffect(() => {
+    if (hoveredUndoId === null || !backendUrl) {
+      setConflictSet(new Set());
+      return;
+    }
+    let cancelled = false;
+    fetch(`${backendUrl}/undo-preview/${hoveredUndoId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) setConflictSet(new Set(data.wouldUndo));
+      })
+      .catch(() => {
+        if (!cancelled) setConflictSet(new Set([hoveredUndoId]));
+      });
+    return () => { cancelled = true; };
+  }, [hoveredUndoId, backendUrl]);
+
+  const wouldBeUndone = (id: number) => conflictSet.has(id);
+
+  return (
+    <div className="border-t border-gray-200 px-2 py-1.5">
+      <div className="flex items-center justify-between mb-1">
+        <span style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Edit Log
+        </span>
+        {onUndo && (
+          <button
+            onClick={() => onUndo()}
+            onMouseEnter={() => setHoveredUndoId(editHistory[editHistory.length - 1]?.id)}
+            onMouseLeave={() => setHoveredUndoId(null)}
+            style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '3px',
+              border: '1px solid #d1d5db',
+              background: '#f9fafb',
+              color: '#374151',
+              cursor: 'pointer',
+            }}
+            title="Undo last edit"
+          >
+            Undo last
+          </button>
+        )}
+      </div>
+      <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '10px' }}>
+        {editHistory.map((entry, index) => {
+          const highlighted = wouldBeUndone(entry.id);
+          return (
+            <div
+              key={entry.id}
+              className="flex items-center gap-1"
+              style={{
+                color: highlighted ? '#dc2626' : '#6b7280',
+                background: highlighted ? '#fef2f2' : 'transparent',
+                lineHeight: 1.3,
+                padding: '2px 3px',
+                borderRadius: '2px',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              <span style={{
+                flexShrink: 0,
+                width: '14px',
+                fontSize: '9px',
+                color: highlighted ? '#dc2626' : '#9ca3af',
+                textAlign: 'right',
+              }}>
+                {index + 1}.
+              </span>
+              <span style={{
+                flexShrink: 0,
+                width: '13px',
+                height: '13px',
+                borderRadius: '2px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                fontWeight: 600,
+                background: highlighted ? '#fecaca' : entry.action === 'merge' ? '#dbeafe' : '#fef3c7',
+                color: highlighted ? '#dc2626' : entry.action === 'merge' ? '#2563eb' : '#d97706',
+              }}>
+                {entry.action === 'merge' ? 'M' : 'E'}
+              </span>
+              <span
+                className="truncate flex-grow"
+                title={entry.description}
+                style={{ textDecoration: highlighted ? 'line-through' : 'none' }}
+              >
+                {entry.lineageName}
+              </span>
+              {onUndo && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUndo(entry.id); }}
+                  onMouseEnter={() => setHoveredUndoId(entry.id)}
+                  onMouseLeave={() => setHoveredUndoId(null)}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: '9px',
+                    color: highlighted ? '#dc2626' : '#9ca3af',
+                    cursor: 'pointer',
+                    background: 'none',
+                    border: 'none',
+                    padding: '0 2px',
+                  }}
+                  title={
+                    conflictSet.size > 1 && conflictSet.has(entry.id)
+                      ? `Undo this + ${conflictSet.size - 1} conflicting edit(s)`
+                      : 'Undo this edit'
+                  }
+                >
+                  ↩
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 // Create a deep comparator for memoization to avoid unnecessary re-renders
 const arePropsEqual = (prevProps: LineageToolsProps, nextProps: LineageToolsProps) => {
@@ -66,6 +209,7 @@ const arePropsEqual = (prevProps: LineageToolsProps, nextProps: LineageToolsProp
   if (prevProps.keyStuff !== nextProps.keyStuff) return false;
 
   if (prevProps.pipelineDownloads !== nextProps.pipelineDownloads) return false;
+  if (prevProps.editHistory !== nextProps.editHistory) return false;
 
   // If we get here, props are considered equal
   return true;
@@ -94,7 +238,9 @@ const LineageTools = React.memo<LineageToolsProps>(({
   config,
   deckSize,
   boundsForQueries,
-  pipelineDownloads
+  pipelineDownloads,
+  editHistory,
+  onUndo
 }) => {
   const [hierarchyData, setHierarchyData] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState({});
@@ -771,6 +917,11 @@ const LineageTools = React.memo<LineageToolsProps>(({
           )}
         </div>
           
+          {/* Edit History Log */}
+          {editHistory && editHistory.length > 0 && (
+            <EditHistoryPanel editHistory={editHistory} onUndo={onUndo} backendUrl={backend?.backend_url} />
+          )}
+
           {/* Lineage list - Always hierarchical */}
           <div className="flex-grow overflow-y-auto">
             {isLoading ? (

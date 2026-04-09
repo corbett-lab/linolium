@@ -130,6 +130,7 @@ waitForTheImports = async () => {
 var processedData = null;
 var cached_starting_values = null;
 var originalLineages = new Map();
+var editHistory = [];  // Stack of edit operations for undo
 
 function snapshotLineages() {
   originalLineages.clear();
@@ -895,6 +896,15 @@ app.post("/merge-lineage", function (req, res) {
     return nodeLineage === lineageName || nodeLineage.startsWith(lineageName + '.');
   };
 
+  // Snapshot affected tips before the edit
+  const affectedNodeIds = new Set();
+  processedData.nodes.forEach(node => {
+    if (node.is_tip && node[field] && isLineageToMerge(node[field])) {
+      affectedNodeIds.add(node.node_id);
+    }
+  });
+  const snapshot = snapshotTips(field, affectedNodeIds);
+
   let mergedCount = 0;
   const affectedLineages = new Set();
 
@@ -908,6 +918,19 @@ app.post("/merge-lineage", function (req, res) {
 
   // Rebuild clade labels to reflect the new tip assignments
   rebuildCladeLabels(field);
+
+  // Record in edit history
+  const editEntry = {
+    id: editHistory.length,
+    action: 'merge',
+    lineageName,
+    field,
+    description: `Merged ${lineageName} into ${parentLineage} (${mergedCount} nodes)`,
+    timestamp: new Date().toISOString(),
+    snapshot,
+    affectedLineages: [lineageName, parentLineage, ...affectedLineages],
+  };
+  editHistory.push(editEntry);
 
   console.log(`Merged ${mergedCount} nodes into ${parentLineage} in ${Date.now() - start_time}ms`);
 
@@ -993,6 +1016,130 @@ function rebuildCladeLabels(field) {
 
   console.log(`Rebuilt ${cladeCount} clade labels in ${Date.now() - start}ms`);
 }
+
+// Snapshot current tip assignments for a set of node IDs (for undo)
+function snapshotTips(field, nodeIds) {
+  const snapshot = {};
+  for (const node of processedData.nodes) {
+    if (node.is_tip && nodeIds.has(node.node_id)) {
+      snapshot[node.node_id] = node[field] || '';
+    }
+  }
+  return snapshot;
+}
+
+// Restore tip assignments from a snapshot and rebuild clade labels
+function restoreTipSnapshot(field, snapshot) {
+  for (const node of processedData.nodes) {
+    if (node.is_tip && snapshot.hasOwnProperty(node.node_id)) {
+      node[field] = snapshot[node.node_id];
+    }
+  }
+  rebuildCladeLabels(field);
+}
+
+// GET endpoint to retrieve edit history
+app.get("/edit-history", function (req, res) {
+  res.send(editHistory.map(entry => ({
+    id: entry.id,
+    action: entry.action,
+    lineageName: entry.lineageName,
+    description: entry.description,
+    timestamp: entry.timestamp,
+    affectedLineages: entry.affectedLineages || [],
+  })));
+});
+
+// Compute which edits would need to be undone along with a target edit.
+// An edit conflicts if it modified any of the same node IDs as the target
+// or any other edit already in the conflict set (transitive closure).
+function computeConflictingEdits(targetId) {
+  const targetIndex = editHistory.findIndex(e => e.id === targetId);
+  if (targetIndex === -1) return [];
+
+  const target = editHistory[targetIndex];
+  const taintedNodeIds = new Set(Object.keys(target.snapshot));
+  const toUndo = [targetId];
+
+  // Walk forward from target+1, expanding the tainted set transitively
+  for (let i = targetIndex + 1; i < editHistory.length; i++) {
+    const entry = editHistory[i];
+    const entryNodeIds = Object.keys(entry.snapshot);
+    const conflicts = entryNodeIds.some(id => taintedNodeIds.has(id));
+    if (conflicts) {
+      toUndo.push(entry.id);
+      entryNodeIds.forEach(id => taintedNodeIds.add(id));
+    }
+  }
+  return toUndo;
+}
+
+// GET endpoint to preview which edits would be undone for a given edit id
+app.get("/undo-preview/:id", function (req, res) {
+  const targetId = parseInt(req.params.id, 10);
+  const ids = computeConflictingEdits(targetId);
+  res.send({ targetId, wouldUndo: ids });
+});
+
+// POST endpoint to undo an edit and any conflicting later edits
+app.post("/undo-edit", function (req, res) {
+  const { id } = req.body || {};
+
+  if (editHistory.length === 0) {
+    return res.status(400).send({ error: "No edits to undo" });
+  }
+
+  // Default to last edit
+  const targetId = id !== undefined ? id : editHistory[editHistory.length - 1].id;
+  const targetIndex = editHistory.findIndex(e => e.id === targetId);
+  if (targetIndex === -1) {
+    return res.status(404).send({ error: `Edit ${targetId} not found` });
+  }
+
+  const idsToUndo = new Set(computeConflictingEdits(targetId));
+
+  // Collect entries to undo (in history order) and entries to keep
+  const toUndo = [];
+  const toKeep = [];
+  for (const entry of editHistory) {
+    if (idsToUndo.has(entry.id)) {
+      toUndo.push(entry);
+    } else {
+      toKeep.push(entry);
+    }
+  }
+
+  // Restore snapshots in reverse order
+  for (let i = toUndo.length - 1; i >= 0; i--) {
+    const entry = toUndo[i];
+    console.log(`Undoing edit #${entry.id}: ${entry.description}`);
+    for (const node of processedData.nodes) {
+      if (node.is_tip && entry.snapshot.hasOwnProperty(node.node_id)) {
+        node[entry.field] = entry.snapshot[node.node_id];
+      }
+    }
+  }
+
+  // Rebuild clade labels once
+  rebuildCladeLabels(toUndo[0].field);
+
+  // Replace history with only the kept entries (re-index ids)
+  editHistory.length = 0;
+  toKeep.forEach((entry, i) => {
+    entry.id = i;
+    editHistory.push(entry);
+  });
+
+  console.log(`Undid ${toUndo.length} edit(s), kept ${toKeep.length}`);
+
+  res.send({
+    success: true,
+    undone: toUndo[0].description,
+    removedCount: toUndo.length,
+    removedIds: toUndo.map(e => e.id),
+    remainingEdits: editHistory.length,
+  });
+});
 
 // POST endpoint to edit lineage root assignments based on selected tree node
 app.post("/edit-lineage-root", function (req, res) {
@@ -1099,6 +1246,15 @@ app.post("/edit-lineage-root", function (req, res) {
     cur = nodeLookup[cur.parent_id];
   }
 
+  // Snapshot all tips that could be affected (in subtree + currently assigned outside)
+  const affectedNodeIds = new Set();
+  processedData.nodes.forEach(node => {
+    if (!node.is_tip) return;
+    if (targetNodeIds.has(node.node_id)) affectedNodeIds.add(node.node_id);
+    if ((node[field] || null) === lineageName) affectedNodeIds.add(node.node_id);
+  });
+  const snapshot = snapshotTips(field, affectedNodeIds);
+
   let assignedCount = 0;
   let clearedCount = 0;
 
@@ -1127,6 +1283,26 @@ app.post("/edit-lineage-root", function (req, res) {
   console.log(`Assigned ${lineageName} to ${assignedCount} tips, displaced ${clearedCount} tips`);
 
   rebuildCladeLabels(field);
+
+  // Collect all lineages this edit touched
+  const editAffectedLineages = new Set([lineageName]);
+  if (parentLineage) editAffectedLineages.add(parentLineage);
+  for (const val of Object.values(snapshot)) {
+    if (val) editAffectedLineages.add(val);
+  }
+
+  // Record in edit history
+  const editEntry = {
+    id: editHistory.length,
+    action: 'edit-root',
+    lineageName,
+    field,
+    description: `Moved ${lineageName} root to node ${rootNodeId} (${assignedCount} assigned, ${clearedCount} displaced)`,
+    timestamp: new Date().toISOString(),
+    snapshot,
+    affectedLineages: [...editAffectedLineages],
+  };
+  editHistory.push(editEntry);
 
   console.log(`Operation completed in ${Date.now() - start_time}ms`);
 

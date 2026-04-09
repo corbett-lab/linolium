@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   Backend,
   Config,
@@ -33,6 +33,7 @@ function useGetDynamicData(
   data: DynamicData;
   boundsForQueries: QueryBounds | null;
   isCurrentlyOutsideBounds: boolean;
+  refreshTreeData: () => void;
 } {
   const { queryNodes } = backend;
   const [dynamicData, setDynamicData] = useState<DynamicData>({
@@ -159,7 +160,14 @@ function useGetDynamicData(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boundsForQueries, queryNodes, triggerRefresh, config]);
 
-  return { data: dynamicData, boundsForQueries, isCurrentlyOutsideBounds };
+  const refreshTreeData = useCallback(() => {
+    // Reset bounds so the next effect cycle re-queries the backend
+    setBoundsForQueries(null);
+    setDynamicData(prev => ({ ...prev, status: "not_started", base_data_is_invalid: true }));
+    setTriggerRefresh({});
+  }, []);
+
+  return { data: dynamicData, boundsForQueries, isCurrentlyOutsideBounds, refreshTreeData };
 }
 
 export default useGetDynamicData;
