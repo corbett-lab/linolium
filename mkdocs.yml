@@ -3,7 +3,7 @@ site_description: Automated phylogenetic lineage proposal and interactive curati
 
 theme:
   name: material
-  logo: assets/title.png
+  logo: assets/logo.png
   favicon: assets/favicon.ico
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -24,6 +24,10 @@ theme:
     - navigation.sections
     - navigation.top
     - content.code.copy
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
 
 extra_css:
   - stylesheets/extra.css

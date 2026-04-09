@@ -1,11 +1,5 @@
-/* Title image replaces text — hide redundant site name */
-.md-header__title .md-ellipsis {
-  display: none;
-}
-
-/* Make the title logo larger since it's the site name */
-.md-header__button.md-logo img,
-.md-header__button.md-logo svg {
-  height: 1.8rem;
-  width: auto;
+/* Center title image on the home page */
+.md-typeset img[alt="Linolium"] {
+  display: block;
+  margin: 0 auto;
 }

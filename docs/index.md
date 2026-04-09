@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/title.png" alt="Linolium" width="400">
-</p>
+![Linolium](assets/title.png){ width=280 }
 
 Automated phylogenetic lineage proposal and interactive curation.
 
