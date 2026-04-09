@@ -67,6 +67,7 @@ export interface DeckProps {
   hoveredKey?: string | null;
   setHoveredKey?: (key: string | null) => void;
   onLineageLabelClick?: (lineage: string) => void;
+  highlightedRoots?: string[] | null;
 }
 
 function Deck({
@@ -96,6 +97,7 @@ function Deck({
   hoveredKey: externalHoveredKey,
   setHoveredKey: externalSetHoveredKey,
   onLineageLabelClick,
+  highlightedRoots,
 }: DeckProps) {
 
   const zoomReset = view.zoomReset;
@@ -262,6 +264,7 @@ function Deck({
     hoveredKey,
     setHoveredKey,
     onLineageLabelClick,
+    highlightedRoots,
     view,
   });
 

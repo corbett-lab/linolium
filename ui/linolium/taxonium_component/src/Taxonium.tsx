@@ -131,6 +131,10 @@ function Taxonium({
   // Add hoveredKey state for cross-component hover effects
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
+  // Set of lineage names whose tree roots should be highlighted (e.g. when
+  // hovering the descendant-count badge in the panel)
+  const [highlightedRoots, setHighlightedRoots] = useState<string[] | null>(null);
+
   // State for lineage editing mode
   const [editingLineage, setEditingLineage] = useState<string | null>(null);
 
@@ -510,6 +514,7 @@ function Taxonium({
           pipelineDownloads={pipelineDownloads}
           editHistory={editHistory}
           onUndo={handleUndo}
+          setHighlightedRoots={setHighlightedRoots}
         />
 
         <div className="flex flex-col md:flex-row overflow-hidden flex-grow">
@@ -571,6 +576,7 @@ function Taxonium({
               hoveredKey={hoveredKey}
               setHoveredKey={setHoveredKey}
               onLineageLabelClick={handleLineageSelect}
+              highlightedRoots={highlightedRoots}
             />
           </div>
 

@@ -71,6 +71,7 @@ interface UseLayersProps {
   hoveredKey: string | null;
   setHoveredKey?: (key: string | null) => void;
   onLineageLabelClick?: (lineage: string) => void;
+  highlightedRoots?: string[] | null;
   view: any;
 }
 
@@ -95,6 +96,7 @@ const useLayers = ({
   hoveredKey,
   setHoveredKey,
   onLineageLabelClick,
+  highlightedRoots,
   view,
 }: UseLayersProps) => {
   const lineColor = settings.lineColor;
@@ -511,6 +513,37 @@ const useLayers = ({
     };
 
 
+    // Ring layer highlighting the clade roots of a set of lineages (e.g. when
+    // hovering the descendant-count badge in the sidebar)
+    const highlightedRootSet = new Set(highlightedRoots || []);
+    const highlight_root_data = (highlightedRoots && highlightedRoots.length > 0)
+      ? detailed_data.nodes.filter(
+          (n: Node) =>
+            n.clades &&
+            n.clades[clade_accessor] &&
+            highlightedRootSet.has(n.clades[clade_accessor])
+        )
+      : [];
+
+    const highlight_root_layer = {
+      layerType: "ScatterplotLayer",
+      id: "highlighted-lineage-roots",
+      data: highlight_root_data,
+      getPosition: (d: Node) => [getX(d), d.y],
+      getRadius: 9,
+      radiusUnits: "pixels",
+      stroked: true,
+      filled: false,
+      getLineColor: [37, 99, 235],
+      lineWidthUnits: "pixels",
+      lineWidthMinPixels: 2,
+      getLineWidth: 2,
+      modelMatrix: modelMatrix,
+      updateTriggers: {
+        getPosition: [getX],
+      },
+    };
+
     const clade_label_layer = {
       layerType: "TextLayer",
       id: "main-clade-node",
@@ -567,6 +600,7 @@ const useLayers = ({
       pretty_stroke_background_layer,
       main_scatter_layer,
       fillin_scatter_layer,
+      highlight_root_layer,
       clade_label_layer,
       selectedLayer,
       hoveredLayer,

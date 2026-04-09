@@ -50,6 +50,7 @@ interface LineageToolsProps {
   pipelineDownloads?: { name: string; path: string }[];
   editHistory?: EditHistoryEntry[];
   onUndo?: (editId?: number) => void;
+  setHighlightedRoots?: (names: string[] | null) => void;
 }
 
 type EditHistoryEntry = {
@@ -247,7 +248,8 @@ const LineageTools = React.memo<LineageToolsProps>(({
   boundsForQueries,
   pipelineDownloads,
   editHistory,
-  onUndo
+  onUndo,
+  setHighlightedRoots
 }) => {
   const [hierarchyData, setHierarchyData] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -770,7 +772,26 @@ const LineageTools = React.memo<LineageToolsProps>(({
             {/* Display count information */}
             <div className="flex items-center text-xs space-x-1">
               {/* Descendant lineages count */}
-              <div className="flex items-center bg-blue-50 px-1.5 py-0.5 rounded text-blue-700 border border-blue-200" title="Descendant lineages">
+              <div
+                className="flex items-center bg-blue-50 px-1.5 py-0.5 rounded text-blue-700 border border-blue-200 cursor-help"
+                title="Descendant lineages (hover to highlight in tree)"
+                onMouseEnter={() => {
+                  if (!setHighlightedRoots) return;
+                  // Collect all descendant lineage names from the hierarchy
+                  const collect = (n: any, acc: string[]) => {
+                    if (n.children) {
+                      for (const child of n.children) {
+                        acc.push(child.name);
+                        collect(child, acc);
+                      }
+                    }
+                  };
+                  const descendants: string[] = [];
+                  collect(node, descendants);
+                  setHighlightedRoots(descendants.length > 0 ? descendants : null);
+                }}
+                onMouseLeave={() => setHighlightedRoots && setHighlightedRoots(null)}
+              >
                 <FaSitemap className="w-3 h-3 mr-1" />
                 <span className="tabular-nums">{(() => {
                   const item = keyStuff?.find(item => item.value === node.name);
