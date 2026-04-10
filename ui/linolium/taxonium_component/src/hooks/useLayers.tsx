@@ -152,8 +152,44 @@ const useLayers = ({
 
     // pick top settings.minTipsForCladeText
     const top_nodes = rev_sorted_by_num_tips.slice(0, settings.maxCladeTexts);
+
+    // When highlighting descendants, add their labels if they won't overlap
+    if (highlightedRoots && highlightedRoots.length > 0) {
+      const shown = new Set(top_nodes.map((n: Node) => n.node_id));
+      const rootSet = new Set(highlightedRoots);
+      const candidates: Node[] = [];
+      for (const source of [detailed_data.nodes, (data.base_data?.nodes || [])]) {
+        for (const n of source) {
+          if (n.clades && n.clades[clade_accessor] && rootSet.has(n.clades[clade_accessor]) && !shown.has(n.node_id)) {
+            candidates.push(n);
+            shown.add(n.node_id);
+          }
+        }
+      }
+      // Filter to avoid overlap: require minimum y spacing based on zoom
+      // A label is ~14px tall; convert to data-space units
+      const curZoomY = Array.isArray(viewState.zoom) ? viewState.zoom[1] : (viewState.zoom as number);
+      const pixelsPerUnit = Math.pow(2, curZoomY);
+      const minYSpacing = 16 / pixelsPerUnit; // ~16px in data coords
+      const allShown = [...top_nodes, ...candidates].sort((a: Node, b: Node) => a.y - b.y);
+      let lastY = -Infinity;
+      const filtered: Node[] = [];
+      for (const n of allShown) {
+        if (n.y - lastY >= minYSpacing) {
+          filtered.push(n);
+          lastY = n.y;
+        } else if (top_nodes.includes(n)) {
+          // Always keep existing labels (they were already shown)
+          filtered.push(n);
+          lastY = n.y;
+        }
+      }
+      top_nodes.length = 0;
+      top_nodes.push(...filtered);
+    }
+
     return top_nodes;
-  }, [detailed_data.nodes, settings.maxCladeTexts, clade_accessor]);
+  }, [detailed_data.nodes, settings.maxCladeTexts, clade_accessor, highlightedRoots, data.base_data]);
 
   const base_data = useMemo(() => {
     if (data.base_data && data.base_data.nodes) {
@@ -567,6 +603,7 @@ const useLayers = ({
       getColor: (d: Node) => {
         const name = d.clades[clade_accessor];
         if (hoveredKey && name === hoveredKey) return [37, 99, 235]; // blue-600
+        if (highlightedRootSet.has(name)) return [37, 99, 235]; // blue-600
         return settings.cladeLabelColor;
       },
       getAngle: 0,
@@ -578,7 +615,9 @@ const useLayers = ({
       getAlignmentBaseline: "center",
       getSize: (d: Node) => {
         const name = d.clades[clade_accessor];
-        return hoveredKey && name === hoveredKey ? 14 : 11;
+        if (hoveredKey && name === hoveredKey) return 14;
+        if (highlightedRootSet.has(name)) return 13;
+        return 11;
       },
       pickable: true,
       onHover: (info: any) => {
@@ -599,8 +638,8 @@ const useLayers = ({
       modelMatrix: modelMatrix,
       updateTriggers: {
         getPosition: [getX],
-        getColor: [hoveredKey, settings.cladeLabelColor],
-        getSize: [hoveredKey],
+        getColor: [hoveredKey, settings.cladeLabelColor, highlightedRoots],
+        getSize: [hoveredKey, highlightedRoots],
       },
     };
 
