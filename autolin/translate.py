@@ -441,6 +441,7 @@ def translate_tree(tree, gtf_path: str, fasta_path: str, default_chrom: str = No
     seq_state_map[root.id] = {}
 
     #bug below need to detect if multiple mutations fall in the same codon and handle them together instead of sequentially applying them and potentially getting intermediate nonsense mutations that mask downstream changes in the same codon. maybe just group by codon first and then apply all mutations to that codon at once?
+    '''
     for node in nodes:
         # Get parent's accumulated state
         if node.id == root.id:
@@ -512,7 +513,9 @@ def translate_tree(tree, gtf_path: str, fasta_path: str, default_chrom: str = No
         # (optional memory optimization for very large trees)
         if node.is_leaf():
             seq_state_map.pop(node.id, None)
+    '''
 
+    
     print(f"Done. Found coding mutations in {len(results)} nodes.")
     
     from collections import defaultdict
